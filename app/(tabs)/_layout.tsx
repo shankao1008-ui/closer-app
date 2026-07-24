@@ -1,34 +1,39 @@
-import { Tabs } from 'expo-router';
-import React from 'react';
+import { Tabs } from "expo-router";
+import { Camera, Home, MessageCircle, Users } from "lucide-react-native";
+import { useApp } from "../../context/AppContext";
 
-import { HapticTab } from '@/components/haptic-tab';
-import { IconSymbol } from '@/components/ui/icon-symbol';
-import { Colors } from '@/constants/theme';
-import { useColorScheme } from '@/hooks/use-color-scheme';
-
-export default function TabLayout() {
-  const colorScheme = useColorScheme();
+export default function TabsLayout() {
+  const { colors, t } = useApp();
 
   return (
     <Tabs
       screenOptions={{
-        tabBarActiveTintColor: Colors[colorScheme ?? 'light'].tint,
         headerShown: false,
-        tabBarButton: HapticTab,
-      }}>
+        tabBarActiveTintColor: colors.primaryDeep,
+        tabBarInactiveTintColor: colors.inkSoft,
+        tabBarStyle: {
+          backgroundColor: colors.navBg,
+          borderTopColor: colors.hairline,
+          borderTopWidth: 1,
+        },
+        tabBarLabelStyle: { fontSize: 10.5, fontWeight: "700" },
+      }}
+    >
       <Tabs.Screen
         name="index"
-        options={{
-          title: 'Home',
-          tabBarIcon: ({ color }) => <IconSymbol size={28} name="house.fill" color={color} />,
-        }}
+        options={{ title: t("tabHome"), tabBarIcon: ({ color, size }) => <Home color={color} size={size} /> }}
       />
       <Tabs.Screen
-        name="explore"
-        options={{
-          title: 'Explore',
-          tabBarIcon: ({ color }) => <IconSymbol size={28} name="paperplane.fill" color={color} />,
-        }}
+        name="chat"
+        options={{ title: t("tabChat"), tabBarIcon: ({ color, size }) => <MessageCircle color={color} size={size} /> }}
+      />
+      <Tabs.Screen
+        name="photo"
+        options={{ title: t("tabPhoto"), tabBarIcon: ({ color, size }) => <Camera color={color} size={size} /> }}
+      />
+      <Tabs.Screen
+        name="us"
+        options={{ title: t("tabUs"), tabBarIcon: ({ color, size }) => <Users color={color} size={size} /> }}
       />
     </Tabs>
   );
