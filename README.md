@@ -1,48 +1,48 @@
 # 靠近 Closer
 
-A cross-platform mobile app for long-distance couples — built with React Native (Expo) and TypeScript.
+A mobile app I built for long-distance couples, using React Native (Expo) and TypeScript.
 
-Closer helps couples feel present in each other's daily lives despite the distance: synced time zones, a "For Habibi" quick-reaction widget, meeting countdowns, live photo sharing, and a fully bilingual (9-language) interface that adapts to each partner's preference.
+I made this because I kept thinking about how annoying it is to be in a relationship across time zones — you never know if it's a good time to text, you forget your partner's local time, and there's no easy way to just say "hey, thinking of you" without opening a whole chat. So I built Closer: it shows both time zones at a glance, has a one-tap "For Habibi" button to send quick reactions, counts down to your next visit, and lets you send a photo with text overlay straight to your partner (currently simulated — see the roadmap below for what's still missing).
 
-> 🧪 This is a personal side project built as an exploration of AI-assisted development (Claude), from product spec through iterative UI design to a working cross-platform app.
+This was a personal side project. I used Claude to help write the code, but I designed the product, made the UI decisions, and iterated on it screen by screen based on what actually felt right to use.
 
 ---
 
-## 📱 Try it
+## Try it
 
 | Platform | How |
 |---|---|
-| **iOS** | Install [Expo Go](https://apps.apple.com/app/expo-go/id982107779), then scan this QR code or open the link below |
-| **Android** | Download and install the standalone APK directly — no extra app needed |
+| **iOS** | Install [Expo Go](https://apps.apple.com/app/expo-go/id982107779), then open the link below or scan the QR code it generates |
+| **Android** | Just download and install the APK directly, no extra app needed |
 
-**iOS (Expo Go):**
-[https://expo.dev/accounts/sarakao/projects/closer-app-native/updates/f9eb4d6b-2a7b-455a-8dc7-02f7759da427](https://expo.dev/accounts/sarakao/projects/closer-app-native/updates/f9eb4d6b-2a7b-455a-8dc7-02f7759da427)
+**iOS (via Expo Go):**
+https://expo.dev/accounts/sarakao/projects/closer-app-native/updates/f9eb4d6b-2a7b-455a-8dc7-02f7759da427
 
 **Android (APK download):**
-[https://expo.dev/accounts/sarakao/projects/closer-app-native/builds/e116561b-71b9-4093-9c34-440b3c3b3f7b](https://expo.dev/accounts/sarakao/projects/closer-app-native/builds/e116561b-71b9-4093-9c34-440b3c3b3f7b)
+https://expo.dev/accounts/sarakao/projects/closer-app-native/builds/e116561b-71b9-4093-9c34-440b3c3b3f7b
 
 ---
 
-## ✨ Features
+## What it does
 
-- **Home** — live dual-timezone clock with real weather, distance between cities, "For Habibi" one-tap reactions (fully customizable via the native emoji keyboard), and a meeting countdown with an animated progress ring
-- **Chat** — messaging with contextual smart reminders (late night, upcoming anniversary, upcoming meetup) and inline partner nickname editing
-- **Live Photo** — take or pick a photo, overlay custom text, and "send" it with a simulated desktop-widget delivery animation
-- **Us** — relationship dashboard: important dates (including multiple recurring monthly anniversaries), editable avatars, shared notification preferences
-- **Settings** — 9-language localization (繁中, English, 简中, 日本語, 한국어, Español, Français, Deutsch, ไทย) and a live-switchable color theme (feminine warm palette / masculine cool palette)
-- **Persistence** — app state, chat history, and photos survive app restarts via local storage (no backend required for single-device use)
+- **Home** — dual time zone clock with real weather, distance between the two cities, "For Habibi" quick reactions (you can change the emoji using your phone's own keyboard, not a fixed set), and a countdown to your next meetup with an animated progress ring
+- **Chat** — text messaging, with reminders that pop up based on context (it's late where they are, an anniversary is coming up, you're about to meet). You can also tap your partner's name to rename them
+- **Live Photo** — take a photo or pick one from your library, add text on top, and "send" it (right now this just plays a send animation — real cross-device delivery isn't built yet, see below)
+- **Us** — a relationship page with important dates (including multiple recurring monthly anniversaries), avatars you can change by tapping them, and shared notification settings
+- **Settings** — the whole app works in 9 languages, and you can switch between a warm/orange theme or a cooler blue theme
+- **Data actually sticks around** — messages, settings, and photos are saved locally so they survive closing and reopening the app
 
-## 🛠 Tech Stack
+## Built with
 
-- **React Native** + **Expo** (SDK 54, Expo Router)
-- **TypeScript**
-- React Context for global state (theme, language, relationship data)
-- `expo-image-picker`, `expo-file-system`, `expo-linear-gradient`, `expo-blur`, `react-native-svg`
-- `@react-native-async-storage/async-storage` for local persistence
-- Custom i18n system (9 languages) built from scratch
-- EAS Build / EAS Update for distribution
+- React Native + Expo (SDK 54, Expo Router)
+- TypeScript
+- React Context for state (theme, language, relationship data)
+- expo-image-picker, expo-file-system, expo-linear-gradient, expo-blur, react-native-svg
+- @react-native-async-storage/async-storage for saving data locally
+- A translation system I built myself, covering 9 languages
+- EAS Build / EAS Update to distribute the app
 
-## 📂 Project Structure
+## Project structure
 
 ```
 app/
@@ -62,7 +62,7 @@ lib/
   storage.ts                 # AsyncStorage + persistent photo file helpers
 ```
 
-## 🚀 Running locally
+## Running it locally
 
 ```bash
 git clone https://github.com/shankao1008-ui/closer-app.git
@@ -71,13 +71,15 @@ npm install
 npx expo start
 ```
 
-Scan the QR code with [Expo Go](https://expo.dev/go) to run it on your own device.
+Then scan the QR code with Expo Go on your phone.
 
 ---
 
-## 🗺 Roadmap / Not yet implemented
+## What's not done yet
 
-- Real two-device pairing (invite code / QR code)
-- Cloud sync of messages & photos across devices
+I'm upfront about this — right now everything runs on one phone at a time, nothing actually syncs between two people yet. Still on my list:
+
+- Real pairing between two devices (invite code / QR code)
+- Actually syncing messages and photos between partners
 - Push notifications
-- Native iOS/Android home-screen widget for live photo delivery
+- A real home-screen widget on iOS/Android for the live photo feature
