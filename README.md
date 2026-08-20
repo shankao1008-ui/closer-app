@@ -6,6 +6,13 @@ I made this because I kept thinking about how annoying it is to be in a relation
 
 This was a personal side project. I used Claude to help write the code, but I designed the product, made the UI decisions, and iterated on it screen by screen based on what actually felt right to use.
 
+<p align="center">
+  <img src="screenshots/home.jpg" width="200" />
+  <img src="screenshots/chat.jpg" width="200" />
+  <img src="screenshots/live-photo.jpg" width="200" />
+  <img src="screenshots/us.jpg" width="200" />
+</p>
+
 ---
 
 ## Try it
