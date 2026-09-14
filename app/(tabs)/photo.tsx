@@ -4,6 +4,8 @@ import { Camera, Image as ImageIcon, Images, Send, Type } from "lucide-react-nat
 import React, { useRef, useState } from "react";
 import {
   Animated,
+  ActivityIndicator,
+  Alert,
   Image,
   LayoutChangeEvent,
   PanResponder,
@@ -16,38 +18,54 @@ import {
   View,
 } from "react-native";
 import { useApp } from "../../context/AppContext";
+import { photoText, photoCaption, photoError } from "../../lib/photoText";
+import { sendPartnerWidgetPhoto } from "../../lib/widgetSync";
 
-const FONTS = ["預設", "手寫", "圓體", "黑體"];
+import ReceivedPhoto from "../../components/ReceivedPhoto";
+import { receivedPhotoText } from "../../lib/receivedPhotoText";
+
+const FONTS = ["defaultFont", "handwriting", "rounded", "bold"] as const;
 const TEXT_COLORS = ["#FFFFFF", "#000000", "#FF6B6B", "#FF8A65", "#CE93D8"];
 const SIZES = [
-  { key: "small", label: "小", fontSize: 18 },
-  { key: "medium", label: "中", fontSize: 26 },
-  { key: "large", label: "大", fontSize: 36 },
+  { key: "small", label: "small" as const, fontSize: 18 },
+  { key: "medium", label: "medium" as const, fontSize: 26 },
+  { key: "large", label: "large" as const, fontSize: 36 },
 ];
 
 export default function PhotoScreen() {
-  const { colors, t, partner } = useApp();
+  const { colors, t, lang, gender, uid, coupleId } = useApp();
+  const copy = photoText(lang);
+  const inboxCopy = receivedPhotoText(lang);
   const styles = makeStyles(colors);
-  const [text, setText] = useState("想你了");
-  const [font, setFont] = useState(FONTS[0]);
+  const canvasGradient = gender === "masculine"
+    ? (["#B9E6FF", "#5A9BE7", "#3156A6"] as const)
+    : (["#FFCFA8", "#FF8A65", "#CE93D8"] as const);
+  const [draft, setText] = useState<string | null>(null);
+  const text = photoCaption(draft, lang);
+  const [font, setFont] = useState<(typeof FONTS)[number]>(FONTS[0]);
   const [color, setColor] = useState(TEXT_COLORS[0]);
   const [sizeKey, setSizeKey] = useState("medium");
   const [sent, setSent] = useState(false);
   const [photoUri, setPhotoUri] = useState<string | null>(null);
+  const [sending, setSending] = useState(false);
   const fadeAnim = useRef(new Animated.Value(0)).current;
 
   const takePhoto = async () => {
-    const perm = await ImagePicker.requestCameraPermissionsAsync();
-    if (!perm.granted) return;
-    const result = await ImagePicker.launchCameraAsync({ quality: 0.8, allowsEditing: true, aspect: [4, 5] });
-    if (!result.canceled && result.assets?.[0]) setPhotoUri(result.assets[0].uri);
+    try {
+      const perm = await ImagePicker.requestCameraPermissionsAsync();
+      if (!perm.granted) { Alert.alert(copy.cameraTitle, copy.cameraBody); return; }
+      const result = await ImagePicker.launchCameraAsync({ quality: 0.8, allowsEditing: true, aspect: [4, 5] });
+      if (!result.canceled && result.assets?.[0]) setPhotoUri(result.assets[0].uri);
+    } catch { Alert.alert(copy.cameraFailed, copy.tryAgain); }
   };
 
   const pickFromLibrary = async () => {
-    const perm = await ImagePicker.requestMediaLibraryPermissionsAsync();
-    if (!perm.granted) return;
-    const result = await ImagePicker.launchImageLibraryAsync({ mediaTypes: ["images"], quality: 0.8, allowsEditing: true, aspect: [4, 5] });
-    if (!result.canceled && result.assets?.[0]) setPhotoUri(result.assets[0].uri);
+    try {
+      const perm = await ImagePicker.requestMediaLibraryPermissionsAsync();
+      if (!perm.granted) { Alert.alert(copy.libraryTitle, copy.libraryBody); return; }
+      const result = await ImagePicker.launchImageLibraryAsync({ mediaTypes: ["images"], quality: 0.8, allowsEditing: true, aspect: [4, 5] });
+      if (!result.canceled && result.assets?.[0]) setPhotoUri(result.assets[0].uri);
+    } catch { Alert.alert(copy.pickerFailed, copy.tryAgain); }
   };
 
   const canvasSize = useRef({ width: 0, height: 0 });
@@ -88,7 +106,24 @@ export default function PhotoScreen() {
 
   const sizeInfo = SIZES.find((s) => s.key === sizeKey)!;
 
-  const handleSend = () => {
+  const handleSend = async () => {
+    if (!uid || !coupleId) {
+      Alert.alert(copy.pairingTitle, copy.pairingBody);
+      return;
+    }
+    if (!photoUri) {
+      Alert.alert(copy.chooseTitle, copy.chooseBody);
+      return;
+    }
+    setSending(true);
+    try {
+      await sendPartnerWidgetPhoto({ uri: photoUri, coupleId, senderId: uid, caption: text });
+    } catch (error: any) {
+      Alert.alert(copy.sendFailed, photoError(error, lang));
+      return;
+    } finally {
+      setSending(false);
+    }
     setSent(true);
     fadeAnim.setValue(0);
     Animated.sequence([
@@ -102,13 +137,15 @@ export default function PhotoScreen() {
     <View style={{ flex: 1 }}>
       <LinearGradient colors={colors.screenBg as any} style={StyleSheet.absoluteFill} />
       <ScrollView contentContainerStyle={styles.body} showsVerticalScrollIndicator={false}>
+        <ReceivedPhoto />
+        <Text style={{ color: colors.ink, fontSize: 18, fontWeight: "700" }}>{inboxCopy.create}</Text>
         {/* photo canvas */}
         <View style={styles.canvasWrap} onLayout={onCanvasLayout}>
           {photoUri ? (
             <Image source={{ uri: photoUri }} style={StyleSheet.absoluteFill} resizeMode="cover" />
           ) : (
             <>
-              <LinearGradient colors={["#FFCFA8", "#FF8A65", "#CE93D8"]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={StyleSheet.absoluteFill} />
+              <LinearGradient colors={canvasGradient} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={StyleSheet.absoluteFill} />
               <View style={styles.canvasIconWrap}>
                 <ImageIcon size={54} color="rgba(255,255,255,0.35)" />
               </View>
@@ -125,14 +162,14 @@ export default function PhotoScreen() {
             <Text
               style={{
                 color, fontSize: sizeInfo.fontSize,
-                fontWeight: font === "黑體" ? "800" : "600",
+                fontWeight: font === "bold" ? "800" : "600",
                 textShadowColor: "rgba(0,0,0,0.25)", textShadowOffset: { width: 0, height: 2 }, textShadowRadius: 8,
               }}
             >
               {text || "..."}
             </Text>
           </Animated.View>
-          <View style={styles.dragHintTag}>
+          <View style={[styles.dragHintTag, { backgroundColor: gender === "masculine" ? "rgba(26,54,93,0.55)" : "rgba(181,75,48,0.55)" }]}>
             <Text style={{ color: "#fff", fontSize: 10.5, fontWeight: "700" }}>{t("dragHint")}</Text>
           </View>
         </View>
@@ -141,11 +178,11 @@ export default function PhotoScreen() {
         <View style={styles.photoActionRow}>
           <Pressable onPress={takePhoto} style={[styles.photoActionBtn, { backgroundColor: colors.cardBg, borderColor: colors.cardBorder }]}>
             <Camera size={16} color={colors.primaryDeep} />
-            <Text style={{ color: colors.ink, fontWeight: "700", fontSize: 12.5, marginLeft: 6 }}>拍照</Text>
+            <Text style={{ color: colors.ink, fontWeight: "700", fontSize: 12.5, marginLeft: 6, flexShrink: 1, textAlign: "center" }}>{copy.takePhoto}</Text>
           </Pressable>
           <Pressable onPress={pickFromLibrary} style={[styles.photoActionBtn, { backgroundColor: colors.cardBg, borderColor: colors.cardBorder }]}>
             <Images size={16} color={colors.primaryDeep} />
-            <Text style={{ color: colors.ink, fontWeight: "700", fontSize: 12.5, marginLeft: 6 }}>從相簿選取</Text>
+            <Text style={{ color: colors.ink, fontWeight: "700", fontSize: 12.5, marginLeft: 6, flexShrink: 1, textAlign: "center" }}>{copy.choosePhoto}</Text>
           </Pressable>
         </View>
 
@@ -170,7 +207,7 @@ export default function PhotoScreen() {
                 onPress={() => setFont(f)}
                 style={[styles.fontChip, { backgroundColor: font === f ? colors.ink : colors.hairline }]}
               >
-                <Text style={{ fontSize: 11.5, color: font === f ? "#fff" : colors.ink, fontWeight: "600" }}>{f}</Text>
+                <Text style={{ fontSize: 11.5, color: font === f ? "#fff" : colors.ink, fontWeight: "600" }}>{copy[f]}</Text>
               </Pressable>
             ))}
           </View>
@@ -195,16 +232,16 @@ export default function PhotoScreen() {
                 onPress={() => setSizeKey(s.key)}
                 style={[styles.sizeChip, { backgroundColor: sizeKey === s.key ? colors.primary : colors.hairline }]}
               >
-                <Text style={{ fontSize: 12, color: sizeKey === s.key ? "#fff" : colors.ink, fontWeight: "700" }}>{s.label}</Text>
+                <Text style={{ fontSize: 12, color: sizeKey === s.key ? "#fff" : colors.ink, fontWeight: "700" }}>{copy[s.label]}</Text>
               </Pressable>
             ))}
           </View>
         </View>
 
-        <Pressable onPress={handleSend} style={styles.sendBtnWrap}>
+        <Pressable onPress={handleSend} disabled={sending} style={[styles.sendBtnWrap, { opacity: sending ? 0.65 : 1 }]}>
           <LinearGradient colors={[colors.primary, colors.lavenderDeep]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }} style={styles.sendBtn}>
-            <Send size={16} color="#fff" />
-            <Text style={{ color: "#fff", fontWeight: "700", fontSize: 14, marginLeft: 8 }}>{t("sendToWidget")}</Text>
+            {sending ? <ActivityIndicator color="#fff" size="small" /> : <Send size={16} color="#fff" />}
+            <Text style={{ color: "#fff", fontWeight: "700", fontSize: 14, marginLeft: 8, flexShrink: 1, textAlign: "center" }}>{sending ? copy.sending : inboxCopy.send}</Text>
           </LinearGradient>
         </Pressable>
       </ScrollView>
@@ -214,10 +251,10 @@ export default function PhotoScreen() {
           {photoUri ? (
             <Image source={{ uri: photoUri }} style={styles.widgetPreview} resizeMode="cover" />
           ) : (
-            <LinearGradient colors={["#FFCFA8", "#FF8A65", "#CE93D8"]} style={styles.widgetPreview} />
+            <LinearGradient colors={canvasGradient} style={styles.widgetPreview} />
           )}
-          <Text style={{ color: "#fff", fontWeight: "700", fontSize: 15, marginTop: -34 }}>{text || "想你了"}</Text>
-          <Text style={{ color: "#fff", fontWeight: "700", fontSize: 15, marginTop: 16 }}>{t("widgetUpdated")}</Text>
+          <Text style={{ color: "#fff", fontWeight: "700", fontSize: 15, marginTop: -34 }}>{text}</Text>
+          <Text style={{ color: "#fff", fontWeight: "700", fontSize: 15, marginTop: 16 }}>{inboxCopy.sent}</Text>
         </Animated.View>
       )}
     </View>
@@ -228,15 +265,15 @@ function makeStyles(colors: any) {
   return StyleSheet.create({
     body: { flexGrow: 1, padding: 16, paddingTop: Platform.OS === "ios" ? 60 : 32, paddingBottom: 50, gap: 14 },
     canvasWrap: { width: "100%", aspectRatio: 4 / 5, borderRadius: 22, overflow: "hidden" },
-    canvasIconWrap: { ...StyleSheet.absoluteFillObject, alignItems: "center", justifyContent: "center" },
+    canvasIconWrap: { ...StyleSheet.absoluteFill, alignItems: "center", justifyContent: "center" },
     dragText: { position: "absolute", left: "50%", top: "78%" },
     dragHintTag: { position: "absolute", top: 10, right: 10, backgroundColor: "rgba(0,0,0,0.3)", paddingHorizontal: 10, paddingVertical: 3, borderRadius: 100 },
     photoActionRow: { flexDirection: "row", gap: 10 },
     photoActionBtn: { flex: 1, flexDirection: "row", alignItems: "center", justifyContent: "center", paddingVertical: 12, borderRadius: 16, borderWidth: 1 },
     card: { borderRadius: 20, padding: 16, borderWidth: 1, gap: 12 },
     textRow: { flexDirection: "row", alignItems: "center" },
-    chipRow: { flexDirection: "row", gap: 8 },
-    fontChip: { paddingHorizontal: 14, paddingVertical: 6, borderRadius: 100 },
+    chipRow: { flexDirection: "row", flexWrap: "wrap", gap: 8 },
+    fontChip: { flexGrow: 1, flexBasis: "40%", alignItems: "center", paddingHorizontal: 4, paddingVertical: 6, borderRadius: 100 },
     sizeChip: { flex: 1, alignItems: "center", paddingVertical: 8, borderRadius: 100 },
     colorRow: { flexDirection: "row", gap: 10 },
     colorDot: { width: 24, height: 24, borderRadius: 12 },

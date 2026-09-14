@@ -7,7 +7,6 @@
     "icon": "./assets/images/icon.png",
     "scheme": "closerappnative",
     "userInterfaceStyle": "automatic",
-    "newArchEnabled": true,
     "ios": {
       "supportsTablet": true,
       "bundleIdentifier": "com.dudu.closer",
@@ -25,7 +24,6 @@
         "backgroundImage": "./assets/images/android-icon-background.png",
         "monochromeImage": "./assets/images/android-icon-monochrome.png"
       },
-      "edgeToEdgeEnabled": true,
       "predictiveBackGestureEnabled": false,
       "permissions": [
         "android.permission.CAMERA",
@@ -57,7 +55,8 @@
           "photosPermission": "靠近需要存取相簿，讓你可以選擇照片傳送給伴侶。",
           "cameraPermission": "靠近需要使用相機，讓你可以拍照傳送給伴侶。"
         }
-      ]
+      ],
+      "@react-native-community/datetimepicker"
     ],
     "experiments": {
       "typedRoutes": true,

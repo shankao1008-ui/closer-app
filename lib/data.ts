@@ -1,13 +1,50 @@
 /* 共用的假資料與計算邏輯 — Home / Chat / Us 都會用到 */
 
-export const ME = { name: "小明", cityName: "台北", tz: "Asia/Taipei", lat: 25.033, lon: 121.5654, avatar: "明" };
-export const PARTNER_BASE = { cityName: "蘇黎世", tz: "Europe/Zurich", lat: 47.3769, lon: 8.5417, avatar: "美" };
+import { City } from "./cities";
+
+// 預設的「我」的資料（會在 AppContext 中被覆蓋）
+export const DEFAULT_ME = { 
+  name: "小明", 
+  city: "台北",
+  tz: "Asia/Taipei", 
+  lat: 25.033, 
+  lon: 121.5654, 
+  avatar: "明" 
+};
+
+// 預設的「對方」的資料（會在 AppContext 中被覆蓋）
+export const DEFAULT_PARTNER = { 
+  name: "小美",
+  city: "蘇黎世", 
+  tz: "Europe/Zurich", 
+  lat: 47.3769, 
+  lon: 8.5417, 
+  avatar: "美" 
+};
+
 export const PARTNER_DEFAULT_NAME = "小美";
 
-export const REL = {
+// 關係資料 - 改為可以動態修改
+export interface Relationship {
+  startDate: Date;
+  lastMeeting: Date;
+  nextMeeting: {
+    cityName: string;
+    city?: City;
+    date: Date;
+  };
+  myBirthday: string; // MM-DD
+  partnerBirthday: string; // MM-DD
+}
+
+// 預設值
+export const DEFAULT_REL: Relationship = {
   startDate: new Date("2023-02-14T00:00:00"),
   lastMeeting: new Date("2026-06-15T00:00:00"),
-  nextMeeting: { cityName: "大阪", date: new Date("2026-08-25T00:00:00") },
+  nextMeeting: { 
+    cityName: "大阪", 
+    date: new Date("2026-08-25T00:00:00") 
+  },
   myBirthday: "05-10",
   partnerBirthday: "08-20",
 };
@@ -52,7 +89,11 @@ export function getZonedParts(date: Date, timeZone: string, locale: string) {
   }
 }
 
-export function diffParts(target: Date, now: Date) {
+export function diffParts(target: Date | null | undefined, now: Date | null | undefined) {
+  // 防呆：如果任一個日期是 null/undefined，或轉換後是無效日期，直接回傳 0，不讓 App 崩潰
+  if (!target || !now || isNaN(target.getTime()) || isNaN(now.getTime())) {
+    return { days: 0, hours: 0 };
+  }
   const ms = Math.abs(target.getTime() - now.getTime());
   return { days: Math.floor(ms / 86400000), hours: Math.floor((ms % 86400000) / 3600000) };
 }

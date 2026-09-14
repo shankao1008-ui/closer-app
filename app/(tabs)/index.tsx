@@ -1,3 +1,6 @@
+import HeartsWishesCards from "../../components/HeartsWishesCards";
+import TogetherCards from "../../components/TogetherCards";
+import CryptoTransferCard from "../../components/CryptoTransferCard";
 import { LinearGradient } from "expo-linear-gradient";
 import { useRouter } from "expo-router";
 import {
@@ -13,6 +16,7 @@ import {
 } from "lucide-react-native";
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
+  Alert,
   Animated,
   KeyboardAvoidingView,
   Modal, Platform,
@@ -25,9 +29,7 @@ import {
 import Svg, { Circle } from "react-native-svg";
 import AvatarPicker from "../../components/AvatarPicker";
 import { LOCALE_MAP, useApp } from "../../context/AppContext";
-import { ME, REL, diffParts, getNextMonthlyOccurrence, getUtcOffsetMinutes, getZonedParts, haversineKm } from "../../lib/data";
-
-/* ---------------- weather helper ---------------- */
+import { diffParts, getNextMonthlyOccurrence, getUtcOffsetMinutes, getZonedParts, haversineKm } from "../../lib/data";
 
 const WEATHER_KEY = (code: number) => {
   if (code === 0) return { Icon: Sun, key: "weatherSunny" };
@@ -38,10 +40,14 @@ const WEATHER_KEY = (code: number) => {
   return { Icon: Wind, key: "weatherCloudy" };
 };
 
-/* ================= Screen ================= */
-
 export default function HomeScreen() {
-  const { colors, t, lang, partner, monthlyDays, partnerAvatarUri, setPartnerAvatarUri, habibiEmojis, setHabibiEmojis } = useApp();
+  const { 
+    colors, t, lang, 
+    myName, myCity, myAvatarUri, setMyAvatarUri,
+    partnerName, setPartnerName, partner, partnerAvatarUri, setPartnerAvatarUri, 
+    monthlyDays, habibiEmojis, setHabibiEmojis,
+    rel
+  } = useApp();
   const router = useRouter();
   const [now, setNow] = useState(new Date());
   const [weather, setWeather] = useState<{ me: any; partner: any }>({ me: null, partner: null });
@@ -67,28 +73,36 @@ export default function HomeScreen() {
       }
     }
     (async () => {
-      const [me, partnerW] = await Promise.all([load(ME), load(partner)]);
-      if (!cancelled) setWeather({ me, partner: partnerW });
+      const [meWeather, partnerWeather] = await Promise.all([
+        load(myCity),
+        load(partner)
+      ]);
+      if (!cancelled) setWeather({ me: meWeather, partner: partnerWeather });
     })();
     return () => { cancelled = true; };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [myCity, partner]);
 
   const locale = LOCALE_MAP[lang] || "en-US";
-  const distanceKm = useMemo(() => haversineKm(ME.lat, ME.lon, partner.lat, partner.lon), [partner]);
-  const meParts = getZonedParts(now, ME.tz, locale);
+  
+  const distanceKm = useMemo(() => 
+    haversineKm(myCity.lat, myCity.lon, partner.lat, partner.lon), 
+    [myCity, partner]
+  );
+  
+  const meParts = getZonedParts(now, myCity.tz, locale);
   const partnerParts = getZonedParts(now, partner.tz, locale);
+  
   const tzDiffHours = useMemo(() => {
-    const offsetMe = getUtcOffsetMinutes(ME.tz, now);
+    const offsetMe = getUtcOffsetMinutes(myCity.tz, now);
     const offsetPartner = getUtcOffsetMinutes(partner.tz, now);
     return Math.round((offsetMe - offsetPartner) / 60);
-  }, [now, partner]);
+  }, [now, partner, myCity]);
 
-  const togetherDays = diffParts(now, REL.startDate).days;
-  const meetingCd = diffParts(REL.nextMeeting.date, now);
+  const togetherDays = diffParts(now, rel.startDate).days;
+  const meetingCd = diffParts(rel.nextMeeting.date, now);
   const monthlyInfo = getNextMonthlyOccurrence(monthlyDays, now);
-  const totalWaitDays = Math.max(1, diffParts(REL.nextMeeting.date, REL.lastMeeting).days);
-  const elapsedWaitDays = Math.max(0, diffParts(now, REL.lastMeeting).days);
+  const totalWaitDays = Math.max(1, diffParts(rel.nextMeeting.date, rel.lastMeeting).days);
+  const elapsedWaitDays = Math.max(0, diffParts(now, rel.lastMeeting).days);
   const progressPct = Math.min(100, Math.round((elapsedWaitDays / totalWaitDays) * 100));
 
   let monthlyDisplay = t("monthlyNotSet");
@@ -114,12 +128,40 @@ export default function HomeScreen() {
     <View style={{ flex: 1 }}>
       <LinearGradient colors={colors.screenBg as any} style={StyleSheet.absoluteFill} />
       <ScrollView contentContainerStyle={styles.body} showsVerticalScrollIndicator={false}>
-        {/* top bar */}
+        {/* top bar - 顯示伴侶（小明） */}
         <View style={styles.topBar}>
           <View style={{ flexDirection: "row", alignItems: "center", gap: 10 }}>
-            <AvatarPicker uri={partnerAvatarUri} onChange={setPartnerAvatarUri} initials={partner.avatar} size={40} bgColor={colors.lavenderDeep} />
+            <AvatarPicker 
+              uri={partnerAvatarUri} 
+              onChange={setPartnerAvatarUri} 
+              initials={partner.avatar} 
+              size={40} 
+              bgColor={colors.lavenderDeep} 
+            />
             <View>
-              <Text style={[styles.name, { color: colors.ink }]}>{partner.name}</Text>
+              <Pressable 
+                onPress={() => {
+                  Alert.prompt(
+                    "編輯伴侶暱稱",
+                    "請輸入伴侶的名字",
+                    [
+                      { text: "取消", style: "cancel" },
+                      { 
+                        text: "儲存", 
+                        onPress: (text?: string) => {
+                          if (text && text.trim()) {
+                            setPartnerName(text.trim());
+                          }
+                        }
+                      }
+                    ],
+                    "plain-text",
+                    partnerName
+                  );
+                }}
+              >
+                <Text style={[styles.name, { color: colors.ink }]}>{partnerName}</Text>
+              </Pressable>
               <View style={{ flexDirection: "row", alignItems: "center", gap: 4 }}>
                 <View style={styles.onlineDot} />
                 <Text style={[styles.subtle, { color: colors.inkSoft }]}>{t("online")}</Text>
@@ -131,10 +173,18 @@ export default function HomeScreen() {
           </Pressable>
         </View>
 
-        {/* dual timezone card */}
+        {/* dual timezone card - 左邊小美，右邊小明 */}
         <View style={styles.card}>
           <View style={{ flexDirection: "row", justifyContent: "space-between" }}>
-            <TzColumn label="我" cityName={ME.cityName} parts={meParts} weatherInfo={meWeather} weatherData={weather.me} t={t} colors={colors} />
+            <TzColumn 
+              label={myName} 
+              cityName={myCity.name} 
+              parts={meParts} 
+              weatherInfo={meWeather} 
+              weatherData={weather.me} 
+              t={t} 
+              colors={colors} 
+            />
             <View style={{ alignItems: "center", justifyContent: "center", paddingHorizontal: 6 }}>
               <View style={[styles.tzDivider, { backgroundColor: colors.hairline }]} />
               <View style={[styles.tzTag, { backgroundColor: colors.primary + "22" }]}>
@@ -144,7 +194,16 @@ export default function HomeScreen() {
               </View>
               <View style={[styles.tzDivider, { backgroundColor: colors.hairline }]} />
             </View>
-            <TzColumn label={partner.name} cityName={partner.cityName} parts={partnerParts} weatherInfo={partnerWeather} weatherData={weather.partner} t={t} colors={colors} align="right" />
+            <TzColumn 
+              label={partnerName} 
+              cityName={partner.city} 
+              parts={partnerParts} 
+              weatherInfo={partnerWeather} 
+              weatherData={weather.partner} 
+              t={t} 
+              colors={colors} 
+              align="right" 
+            />
           </View>
           <View style={[styles.distanceRow, { borderTopColor: colors.hairline }]}>
             <MapPin size={13} color={colors.inkSoft} />
@@ -179,7 +238,9 @@ export default function HomeScreen() {
               <View style={{ flexDirection: "row", alignItems: "center", gap: 4, marginTop: 2 }}>
                 <Plane size={12} color={colors.inkSoft} />
                 <Text style={{ fontSize: 12, color: colors.inkSoft }}>
-                  {REL.nextMeeting.cityName} · {REL.nextMeeting.date.getMonth() + 1}/{REL.nextMeeting.date.getDate()}
+                  {rel.nextMeeting?.date
+  ? `${rel.nextMeeting.cityName || ""} · ${new Date(rel.nextMeeting.date).getMonth() + 1}/${new Date(rel.nextMeeting.date).getDate()}`
+  : "尚未設定下次見面日期"}
                 </Text>
               </View>
             </View>
@@ -189,6 +250,9 @@ export default function HomeScreen() {
             <MiniStat label={t("togetherLabel")} value={`${togetherDays.toLocaleString()} ${t("daysWord")}`} icon={Heart} colors={colors} />
           </View>
         </View>
+        <HeartsWishesCards />
+        <TogetherCards />
+        <CryptoTransferCard />
       </ScrollView>
 
       {/* sent overlay */}
@@ -199,7 +263,7 @@ export default function HomeScreen() {
         </Animated.View>
       )}
 
-      {/* emoji picker — uses the phone's native emoji keyboard, not a fixed list */}
+      {/* emoji picker */}
       <Modal visible={pickerIndex !== null} transparent animationType="fade" onRequestClose={() => setPickerIndex(null)}>
         <KeyboardAvoidingView
           style={styles.modalBackdrop}
@@ -328,7 +392,6 @@ function makeStyles(colors: any) {
     overlay: { position: "absolute", top: 0, left: 0, right: 0, bottom: 0, alignItems: "center", justifyContent: "center" },
     modalBackdrop: { flex: 1, backgroundColor: "rgba(20,14,20,0.5)", alignItems: "center", justifyContent: "center", padding: 24 },
     pickerCard: { width: "100%", borderRadius: 22, padding: 18 },
-    emojiOption: { width: "17%", aspectRatio: 1, borderRadius: 14, alignItems: "center", justifyContent: "center" },
     emojiInput: { borderRadius: 14, borderWidth: 1, paddingHorizontal: 14, paddingVertical: 12, fontSize: 20, textAlign: "center", marginBottom: 14 },
     confirmBtn: { paddingVertical: 12, borderRadius: 14, alignItems: "center" },
   });

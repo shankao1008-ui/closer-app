@@ -1,6 +1,11 @@
-import React, { createContext, useCallback, useContext, useEffect, useMemo, useState } from "react";
-import { DEFAULT_MONTHLY_DAYS, PARTNER_BASE, PARTNER_DEFAULT_NAME } from "../lib/data";
+import React, { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from "react";
+import { City, getCityByTz } from "../lib/cities";
+import { DEFAULT_MONTHLY_DAYS, DEFAULT_REL, Relationship } from "../lib/data";
+import { supabase } from "../lib/supabase";
 import { loadJSON, saveJSON } from "../lib/storage";
+import { unpairCouple } from "../lib/pairing";
+import { getAvatarUrl, uploadAvatar } from "../lib/auth";
+import type { Session } from "@supabase/supabase-js";
 
 export const LANGUAGES = [
   { code: "zh-Hant", native: "繁體中文" },
@@ -44,7 +49,7 @@ export const THEMES = {
 };
 export type Gender = keyof typeof THEMES;
 
-/* ---------------- Translations (subset used so far; expand as we port more screens) ---------------- */
+/* ---------------- Translations ---------------- */
 
 export const T: Record<string, Record<string, string>> = {
   tabHome: mk("首頁", "Home", "首页", "ホーム", "홈", "Inicio", "Accueil", "Start", "หน้าแรก"),
@@ -111,6 +116,15 @@ export const T: Record<string, Record<string, string>> = {
   takePhotoLabel: mk("拍照", "Take Photo", "拍照", "撮影", "촬영", "Tomar Foto", "Prendre une Photo", "Foto aufnehmen", "ถ่ายรูป"),
   chooseLibraryLabel: mk("從相簿選取", "Choose from Library", "从相簿选取", "アルバムから選択", "앨범에서 선택", "Elegir del Álbum", "Choisir dans l'Album", "Aus Album wählen", "เลือกจากอัลบั้ม"),
   typeEmojiHint: mk("點鍵盤上的表情符號圖示，選一個喜歡的", "Tap the emoji key on your keyboard to pick one", "点键盘上的表情符号图标，选一个喜欢的", "キーボードの絵文字アイコンをタップして選択", "키보드의 이모지 아이콘을 눌러 선택", "Toca el ícono de emoji en tu teclado", "Appuie sur l'icône emoji du clavier", "Tippe auf das Emoji-Symbol der Tastatur", "แตะไอคอนอิโมจิบนแป้นพิมพ์"),
+  myProfile: mk("我的個人資料", "My Profile", "我的个人资料", "マイプロフィール", "내 프로필", "Mi Perfil", "Mon Profil", "Mein Profil", "โปรไฟล์ของฉัน"),
+  editMyName: mk("編輯我的名字", "Edit My Name", "编辑我的名字", "名前を編集", "내 이름 수정", "Editar Mi Nombre", "Modifier Mon Nom", "Meinen Namen Bearbeiten", "แก้ไขชื่อของฉัน"),
+  yourNameLabel: mk("你的名字", "Your Name", "你的名字", "あなたの名前", "당신의 이름", "Tu Nombre", "Ton Nom", "Dein Name", "ชื่อของคุณ"),
+  partnerInfo: mk("伴侶資訊", "Partner Info", "伴侣信息", "パートナー情報", "파트너 정보", "Info de Pareja", "Info Partenaire", "Partner-Info", "ข้อมูลคู่"),
+  partnerProfile: mk("伴侶的個人資料", "Partner's Profile", "伴侣的个人资料", "パートナーのプロフィール", "파트너의 프로필", "Perfil de Pareja", "Profil du Partenaire", "Profil des Partners", "โปรไฟล์ของคู่"),
+  myCity: mk("我的城市", "My City", "我的城市", "私の都市", "내 도시", "Mi Ciudad", "Ma Ville", "Meine Stadt", "เมืองของฉัน"),
+  searchCity: mk("搜尋城市...", "Search city...", "搜索城市...", "都市を検索...", "도시 검색...", "Buscar ciudad...", "Rechercher une ville...", "Stadt suchen...", "ค้นหาเมือง..."),
+  selectedCity: mk("已選城市", "Selected City", "已选城市", "選択中の都市", "선택한 도시", "Ciudad Seleccionada", "Ville Sélectionnée", "Ausgewählte Stadt", "เมืองที่เลือก"),
+  changeCity: mk("更換城市", "Change City", "更换城市", "都市を変更", "도시 변경", "Cambiar Ciudad", "Changer de Ville", "Stadt Ändern", "เปลี่ยนเมือง"),
 };
 
 function useTranslator(lang: string) {
@@ -131,40 +145,146 @@ type AppCtxValue = {
   setGender: (g: Gender) => void;
   lang: string;
   setLang: (l: string) => void;
-  colors: typeof THEMES["feminine"];
+  colors: (typeof THEMES)[Gender];
   t: (key: string, vars?: Record<string, string | number>) => string;
+  
+  // 我的資料 - 小美
+  myName: string;
+  setMyName: (n: string) => void;
+  myCity: City;
+  setMyCity: (city: City) => void;
+  myAvatarUri: string | null;
+  setMyAvatarUri: (uri: string | null) => void;
+  
+  // 對方資料 - 小明
   partnerName: string;
   setPartnerName: (n: string) => void;
-  partner: typeof PARTNER_BASE & { name: string };
+  partnerCity: City;
+  setPartnerCity: (city: City) => void;
+  partnerAvatarUri: string | null;
+  setPartnerAvatarUri: (uri: string | null) => void;
+  
+  rel: Relationship;
+  setRel: (rel: Relationship | ((prev: Relationship) => Relationship)) => void;
+  
+  partner: { name: string; city: string; tz: string; lat: number; lon: number; avatar: string };
   monthlyDays: number[];
   setMonthlyDays: (d: number[] | ((prev: number[]) => number[])) => void;
   notifSettings: { forYou: boolean };
   setNotifSettings: (n: any) => void;
-  myAvatarUri: string | null;
-  setMyAvatarUri: (uri: string | null) => void;
-  partnerAvatarUri: string | null;
-  setPartnerAvatarUri: (uri: string | null) => void;
   habibiEmojis: string[];
   setHabibiEmojis: (e: string[] | ((prev: string[]) => string[])) => void;
   isLoaded: boolean;
+  authReady: boolean;
+  session: Session | null;
+  accountReady: boolean;
+  accountError: boolean;
+  retryAccountLoad: () => void;
+  profileComplete: boolean;
+  myBirthDate: string | null;
+  uid: string | null;
+  coupleId: string | null;
+  partnerUid: string | null;
+  unpair: () => Promise<void>;
+  refreshPairing: () => Promise<void>;
+  completeProfile: (profile: { name: string; birthDate: string; avatarUri: string }) => Promise<void>;
+  signOut: () => Promise<void>;
 };
 
 const AppCtx = createContext<AppCtxValue | null>(null);
 const DEFAULT_HABIBI_EMOJIS = ["😘", "❤️", "🌅"];
 
+function findCityByTz(tz: string): City {
+  const found = getCityByTz(tz);
+  if (found) return found;
+  return { name: "台北", country: "台灣", tz: "Asia/Taipei", lat: 25.033, lon: 121.5654, emoji: "🏯" };
+}
+
+function normalizeCity(value: any): City | null {
+  if (
+    value &&
+    typeof value.name === "string" &&
+    typeof value.country === "string" &&
+    typeof value.tz === "string" &&
+    typeof value.lat === "number" &&
+    typeof value.lon === "number"
+  ) {
+    return value as City;
+  }
+  return typeof value?.tz === "string" ? getCityByTz(value.tz) ?? null : null;
+}
+
+function toDate(value: any): Date | null {
+  if (!value) return null;
+  const date = typeof value?.toDate === "function"
+    ? value.toDate()
+    : value instanceof Date
+      ? value
+      : new Date(value);
+  return date instanceof Date && !Number.isNaN(date.getTime()) ? date : null;
+}
+
+function normalizeRelationship(value: any): Relationship {
+  return {
+    ...DEFAULT_REL,
+    ...value,
+    startDate: toDate(value?.startDate) ?? DEFAULT_REL.startDate,
+    lastMeeting: toDate(value?.lastMeeting) ?? DEFAULT_REL.lastMeeting,
+    nextMeeting: {
+      ...DEFAULT_REL.nextMeeting,
+      ...value?.nextMeeting,
+      date: toDate(value?.nextMeeting?.date) ?? DEFAULT_REL.nextMeeting.date,
+    },
+  };
+}
+
 export function AppProvider({ children }: { children: React.ReactNode }) {
   const [gender, setGender] = useState<Gender>("feminine");
   const [lang, setLang] = useState("zh-Hant");
-  const [partnerName, setPartnerName] = useState(PARTNER_DEFAULT_NAME);
+  
+  // 我的資料 - 你是小美
+  const [myName, setMyName] = useState("小美");
+  const [myCity, setMyCity] = useState<City>(findCityByTz("Asia/Taipei"));
+  const [myAvatarUri, setMyAvatarUri] = useState<string | null>(null);
+  
+  // 對方資料 - 你的伴侶是小明
+  const [partnerName, setPartnerName] = useState("小明");
+  const [partnerCity, setPartnerCity] = useState<City>(findCityByTz("Europe/Zurich"));
+  const [partnerAvatarUri, setPartnerAvatarUri] = useState<string | null>(null);
+  
+  const [rel, setRel] = useState<Relationship>(DEFAULT_REL);
+  
   const [monthlyDays, setMonthlyDays] = useState<number[]>(DEFAULT_MONTHLY_DAYS);
   const [notifSettings, setNotifSettings] = useState({ forYou: true });
-  const [myAvatarUri, setMyAvatarUri] = useState<string | null>(null);
-  const [partnerAvatarUri, setPartnerAvatarUri] = useState<string | null>(null);
   const [habibiEmojis, setHabibiEmojis] = useState<string[]>(DEFAULT_HABIBI_EMOJIS);
   const [isLoaded, setIsLoaded] = useState(false);
+  const [authReady, setAuthReady] = useState(false);
+  const [accountError, setAccountError] = useState(false);
+  const [profileOwner, setProfileOwner] = useState<string | null>(null);
+  const [loadAttempt, setLoadAttempt] = useState(0);
+  const currentUidRef = useRef<string | null>(null);
+  const retryAccountLoad = useCallback(() => {
+    setAccountError(false);
+    setLoadAttempt((attempt) => attempt + 1);
+  }, []);
+  const [session, setSession] = useState<Session | null>(null);
+  const [profileComplete, setProfileComplete] = useState(false);
+  const [myBirthDate, setMyBirthDate] = useState<string | null>(null);
+  const [uid, setUid] = useState<string | null>(null);
+  const [coupleId, setCoupleId] = useState<string | null>(null);
+  const [partnerUid, setPartnerUid] = useState<string | null>(null);
+  const [sharedLoadedCouple, setSharedLoadedCouple] = useState<string | null>(null);
   const t = useTranslator(lang);
   const colors = THEMES[gender];
-  const partner = useMemo(() => ({ ...PARTNER_BASE, name: partnerName }), [partnerName]);
+  
+  const partner = useMemo(() => ({ 
+    name: partnerName,
+    city: partnerCity.name,
+    tz: partnerCity.tz,
+    lat: partnerCity.lat,
+    lon: partnerCity.lon,
+    avatar: partnerName.charAt(0),
+  }), [partnerName, partnerCity]);
 
   // 開啟 App 時，把上次存的資料讀回來
   useEffect(() => {
@@ -173,7 +293,19 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       if (saved) {
         if (saved.gender) setGender(saved.gender);
         if (saved.lang) setLang(saved.lang);
+        if (saved.myName) setMyName(saved.myName);
+        if (saved.myCity) {
+          const city = normalizeCity(saved.myCity);
+          if (city) setMyCity(city);
+        }
         if (saved.partnerName) setPartnerName(saved.partnerName);
+        if (saved.partnerCity) {
+          const city = normalizeCity(saved.partnerCity);
+          if (city) setPartnerCity(city);
+        }
+        if (saved.rel) {
+          setRel(normalizeRelationship(saved.rel));
+        }
         if (saved.monthlyDays) setMonthlyDays(saved.monthlyDays);
         if (saved.notifSettings) setNotifSettings(saved.notifSettings);
         if (saved.myAvatarUri) setMyAvatarUri(saved.myAvatarUri);
@@ -184,22 +316,258 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     })();
   }, []);
 
-  // 資料變動時自動存檔（跳過第一次載入前的狀態，避免用預設值把剛讀到的資料覆蓋掉）
+  // 資料變動時自動存檔
   useEffect(() => {
     if (!isLoaded) return;
     saveJSON("appState", {
-      gender, lang, partnerName, monthlyDays, notifSettings, myAvatarUri, partnerAvatarUri, habibiEmojis,
+      gender, lang, myName, myCity, partnerName, partnerCity, 
+      rel,
+      monthlyDays, notifSettings, 
+      myAvatarUri, partnerAvatarUri, habibiEmojis,
     });
-  }, [isLoaded, gender, lang, partnerName, monthlyDays, notifSettings, myAvatarUri, partnerAvatarUri, habibiEmojis]);
+  }, [isLoaded, gender, lang, myName, myCity, partnerName, partnerCity, rel, monthlyDays, notifSettings, myAvatarUri, partnerAvatarUri, habibiEmojis]);
+
+  const refreshCouple = useCallback(async (currentUid: string) => {
+    const { data, error } = await supabase.from("couple_members")
+      .select("couple_id,user_id").eq("user_id", currentUid).maybeSingle();
+    if (currentUidRef.current !== currentUid) return;
+    if (error) throw error;
+    const nextCoupleId = data?.couple_id ?? null;
+    setCoupleId(nextCoupleId);
+    if (!nextCoupleId) {
+      setPartnerUid(null);
+      return;
+    }
+    const { data: members } = await supabase.from("couple_members")
+      .select("user_id").eq("couple_id", nextCoupleId);
+    if (currentUidRef.current !== currentUid) return;
+    setPartnerUid(members?.find((member) => member.user_id !== currentUid)?.user_id ?? null);
+  }, []);
+
+  // Session events only publish state. Database calls run in a separate effect.
+  useEffect(() => {
+    let active = true;
+    let eventReceived = false;
+    const publish = (next: Session | null) => {
+      if (!active) return;
+      const accepted = next?.user.is_anonymous ? null : next;
+      const nextUid = accepted?.user.id ?? null;
+      if (currentUidRef.current !== nextUid) {
+        setProfileOwner(null);
+        setProfileComplete(false);
+        setMyBirthDate(null);
+        setMyAvatarUri(null);
+        setCoupleId(null);
+        setPartnerUid(null);
+        setAccountError(false);
+      }
+      currentUidRef.current = nextUid;
+      setSession(accepted);
+      setUid(nextUid);
+      setAuthReady(true);
+    };
+    const timer = setTimeout(() => {
+      if (active && !eventReceived) setAccountError(true);
+    }, 15_000);
+    const { data: listener } = supabase.auth.onAuthStateChange((_event, next) => {
+      eventReceived = true;
+      clearTimeout(timer);
+      publish(next);
+    });
+    supabase.auth.getSession().then(({ data, error }) => {
+      if (!active || eventReceived) return;
+      clearTimeout(timer);
+      if (error) { setAccountError(true); return; }
+      publish(data.session);
+    }).catch(() => {
+      if (active && !eventReceived) {
+        clearTimeout(timer);
+        setAccountError(true);
+      }
+    });
+    return () => { active = false; clearTimeout(timer); listener.subscription.unsubscribe(); };
+  }, [loadAttempt]);
+
+  // Never treat an unread or failed profile request as an incomplete profile.
+  useEffect(() => {
+    if (!uid) return;
+    let active = true;
+    let expired = false;
+    const isCurrent = () => active && !expired && currentUidRef.current === uid;
+    setProfileOwner(null);
+    setAccountError(false);
+    const timer = setTimeout(() => {
+      if (active && currentUidRef.current === uid) {
+        expired = true;
+        setAccountError(true);
+      }
+    }, 15_000);
+    const load = async () => {
+      const { data, error } = await supabase.from("profiles")
+        .select("display_name,birth_date,avatar_url,onboarding_completed,city_data")
+        .eq("id", uid).maybeSingle();
+      if (!isCurrent()) return;
+      if (error) throw error;
+      clearTimeout(timer);
+      setProfileComplete(Boolean(data?.onboarding_completed));
+      setMyBirthDate(data?.birth_date ?? null);
+      if (data?.display_name) setMyName(data.display_name);
+      const city = normalizeCity(data?.city_data);
+      if (city) setMyCity(city);
+      setProfileOwner(uid);
+      // Avatar signing does not block entering the app.
+      getAvatarUrl(data?.avatar_url ?? null).then((avatarUrl) => {
+        if (isCurrent()) setMyAvatarUri(avatarUrl);
+      }).catch(() => {});
+    };
+    void load().catch(() => {
+      if (isCurrent()) { clearTimeout(timer); setAccountError(true); }
+    });
+    return () => { active = false; clearTimeout(timer); };
+  }, [uid, loadAttempt]);
+
+  useEffect(() => {
+    if (uid) void refreshCouple(uid).catch(() => {
+      console.warn("Couple data could not be loaded.");
+    });
+  }, [uid, loadAttempt, refreshCouple]);
+
+  const accountReady = authReady && (!uid || profileOwner === uid);
+
+  // 監聽配對狀態，讓建立配對碼的一方也會自動更新。
+  useEffect(() => {
+    if (!uid) return;
+    const channel = supabase.channel(`membership:${uid}`)
+      .on("postgres_changes", { event: "*", schema: "public", table: "couple_members" }, () => {
+        refreshCouple(uid).catch(console.warn);
+      }).subscribe();
+    return () => { supabase.removeChannel(channel); };
+  }, [uid, refreshCouple]);
+
+  // 同步自己的公開資料。
+  useEffect(() => {
+    if (!uid || !isLoaded || !profileComplete) return;
+    const timer = setTimeout(() => {
+      supabase.from("profiles").update({
+        display_name: myName,
+        city: myCity.name,
+        city_data: myCity,
+        updated_at: new Date().toISOString(),
+      }).eq("id", uid).then(({ error }) => { if (error) console.warn(error.message); });
+    }, 350);
+    return () => clearTimeout(timer);
+  }, [uid, isLoaded, profileComplete, myName, myCity]);
+
+  // 載入並監聽伴侶資料。
+  useEffect(() => {
+    if (!partnerUid) return;
+    const loadPartner = async () => {
+      const { data } = await supabase.from("profiles").select("display_name,city_data,avatar_url")
+        .eq("id", partnerUid).maybeSingle();
+      if (data?.display_name) setPartnerName(data.display_name);
+      const city = normalizeCity(data?.city_data);
+      if (city) setPartnerCity(city);
+      setPartnerAvatarUri(await getAvatarUrl(data?.avatar_url ?? null));
+    };
+    loadPartner().catch(console.warn);
+    const channel = supabase.channel(`profile:${partnerUid}`)
+      .on("postgres_changes", { event: "UPDATE", schema: "public", table: "profiles", filter: `id=eq.${partnerUid}` }, loadPartner)
+      .subscribe();
+    return () => { supabase.removeChannel(channel); };
+  }, [partnerUid]);
+
+  // 先載入遠端關係資料，避免新裝置用預設日期覆蓋既有資料。
+  useEffect(() => {
+    if (!coupleId) {
+      setSharedLoadedCouple(null);
+      return;
+    }
+    const applyRemote = async () => {
+      const { data, error } = await supabase.from("relationship_settings")
+        .select("relationship_data").eq("couple_id", coupleId).maybeSingle();
+      if (error) throw error;
+      const remote = data?.relationship_data;
+      if (remote) {
+        setRel(normalizeRelationship(remote));
+        if (Array.isArray(remote.monthlyDays)) setMonthlyDays(remote.monthlyDays);
+      }
+      setSharedLoadedCouple(coupleId);
+    };
+    applyRemote().catch(console.warn);
+  }, [coupleId]);
+
+  // 關係日期為兩人共用資料。
+  useEffect(() => {
+    if (!coupleId || !isLoaded || sharedLoadedCouple !== coupleId) return;
+    const payload = {
+      ...rel,
+      startDate: rel.startDate?.toISOString?.() ?? null,
+      lastMeeting: rel.lastMeeting?.toISOString?.() ?? null,
+      nextMeeting: { ...rel.nextMeeting, date: rel.nextMeeting?.date?.toISOString?.() ?? null },
+      monthlyDays,
+    };
+    const timer = setTimeout(() => {
+      supabase.from("relationship_settings").upsert({ couple_id: coupleId, relationship_data: payload,
+        updated_at: new Date().toISOString() }).then(({ error }) => { if (error) console.warn(error.message); });
+    }, 500);
+    return () => clearTimeout(timer);
+  }, [coupleId, isLoaded, sharedLoadedCouple, rel, monthlyDays]);
+
+  const refreshPairing = useCallback(async () => {
+    if (uid) await refreshCouple(uid);
+  }, [uid, refreshCouple]);
+
+  const unpair = useCallback(async () => {
+    if (!uid || !coupleId) return;
+    await unpairCouple(uid, coupleId);
+    setCoupleId(null);
+    setPartnerUid(null);
+    setPartnerName("小明");
+    setPartnerAvatarUri(null);
+  }, [uid, coupleId]);
+
+  const completeProfile = useCallback(async ({ name, birthDate, avatarUri }: { name: string; birthDate: string; avatarUri: string }) => {
+    if (!uid) throw new Error("Please sign in again.");
+    const avatarPath = await uploadAvatar(uid, avatarUri);
+    const { error } = await supabase.from("profiles").upsert({
+      id: uid,
+      display_name: name.trim(),
+      birth_date: birthDate,
+      avatar_url: avatarPath,
+      city: myCity.name,
+      city_data: myCity,
+      onboarding_completed: true,
+      updated_at: new Date().toISOString(),
+    });
+    if (error) throw error;
+    setMyName(name.trim());
+    setMyBirthDate(birthDate);
+    setMyAvatarUri(avatarUri);
+    setProfileComplete(true);
+  }, [uid, myCity]);
+
+  const signOut = useCallback(async () => {
+    const { error } = await supabase.auth.signOut();
+    if (error) throw error;
+    setSession(null);
+    setUid(null);
+    setProfileComplete(false);
+  }, []);
 
   const value = useMemo(
     () => ({
-      gender, setGender, lang, setLang, colors, t, partnerName, setPartnerName, partner,
+      gender, setGender, lang, setLang, colors, t,
+      myName, setMyName, myCity, setMyCity, myAvatarUri, setMyAvatarUri,
+      partnerName, setPartnerName, partnerCity, setPartnerCity, partnerAvatarUri, setPartnerAvatarUri,
+      rel, setRel,
+      partner,
       monthlyDays, setMonthlyDays, notifSettings, setNotifSettings,
-      myAvatarUri, setMyAvatarUri, partnerAvatarUri, setPartnerAvatarUri,
-      habibiEmojis, setHabibiEmojis, isLoaded,
+      habibiEmojis, setHabibiEmojis, isLoaded, authReady, accountReady, accountError, retryAccountLoad, session, profileComplete, myBirthDate,
+      uid, coupleId, partnerUid, unpair, refreshPairing, completeProfile, signOut,
     }),
-    [gender, lang, colors, t, partnerName, partner, monthlyDays, notifSettings, myAvatarUri, partnerAvatarUri, habibiEmojis, isLoaded]
+    [gender, lang, colors, t, myName, myCity, myAvatarUri, partnerName, partnerCity, partnerAvatarUri, 
+     partner, rel, monthlyDays, notifSettings, habibiEmojis, isLoaded, authReady, accountReady, accountError, retryAccountLoad, session, profileComplete,
+     myBirthDate, uid, coupleId, partnerUid, unpair, refreshPairing, completeProfile, signOut]
   );
   return <AppCtx.Provider value={value}>{children}</AppCtx.Provider>;
 }

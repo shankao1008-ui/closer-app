@@ -1,92 +1,55 @@
 # 靠近 Closer
 
-A mobile app I built for long-distance couples, using React Native (Expo) and TypeScript.
+A React Native / Expo app for long-distance couples. This source snapshot comes from the latest uploaded Expo Go project (September 2026).
 
-I made this because I kept thinking about how annoying it is to be in a relationship across time zones — you never know if it's a good time to text, you forget your partner's local time, and there's no easy way to just say "hey, thinking of you" without opening a whole chat. So I built Closer: it shows both time zones at a glance, has a one-tap "For Habibi" button to send quick reactions, counts down to your next visit, and lets you send a photo with text overlay straight to your partner (currently simulated — see the roadmap below for what's still missing).
+## Run on your phone
 
-This was a personal side project. I used Claude to help write the code, but I designed the product, made the UI decisions, and iterated on it screen by screen based on what actually felt right to use.
-
-<p align="center">
-  <img src="screenshots/home.jpg" width="200" />
-  <img src="screenshots/chat.jpg" width="200" />
-  <img src="screenshots/live-photo.jpg" width="200" />
-  <img src="screenshots/us.jpg" width="200" />
-</p>
-
----
-
-## Try it
-
-| Platform | How |
-|---|---|
-| **iOS** | Install [Expo Go](https://apps.apple.com/app/expo-go/id982107779), then open the link below or scan the QR code it generates |
-| **Android** | Just download and install the APK directly, no extra app needed |
-
-**iOS (via Expo Go):**
-https://expo.dev/accounts/sarakao/projects/closer-app-native/updates/f9eb4d6b-2a7b-455a-8dc7-02f7759da427
-
-**Android (APK download):**
-https://expo.dev/accounts/sarakao/projects/closer-app-native/builds/e116561b-71b9-4093-9c34-440b3c3b3f7b
-
----
-
-## What it does
-
-- **Home** — dual time zone clock with real weather, distance between the two cities, "For Habibi" quick reactions (you can change the emoji using your phone's own keyboard, not a fixed set), and a countdown to your next meetup with an animated progress ring
-- **Chat** — text messaging, with reminders that pop up based on context (it's late where they are, an anniversary is coming up, you're about to meet). You can also tap your partner's name to rename them
-- **Live Photo** — take a photo or pick one from your library, add text on top, and "send" it (right now this just plays a send animation — real cross-device delivery isn't built yet, see below)
-- **Us** — a relationship page with important dates (including multiple recurring monthly anniversaries), avatars you can change by tapping them, and shared notification settings
-- **Settings** — the whole app works in 9 languages, and you can switch between a warm/orange theme or a cooler blue theme
-- **Data actually sticks around** — messages, settings, and photos are saved locally so they survive closing and reopening the app
-
-## Built with
-
-- React Native + Expo (SDK 54, Expo Router)
-- TypeScript
-- React Context for state (theme, language, relationship data)
-- expo-image-picker, expo-file-system, expo-linear-gradient, expo-blur, react-native-svg
-- @react-native-async-storage/async-storage for saving data locally
-- A translation system I built myself, covering 9 languages
-- EAS Build / EAS Update to distribute the app
-
-## Project structure
-
-```
-app/
-  _layout.tsx            # root layout, wraps AppProvider
-  (tabs)/
-    index.tsx             # Home
-    chat.tsx               # Chat
-    photo.tsx               # Live Photo
-    us.tsx                   # Us
-  settings.tsx            # Settings modal
-components/
-  AvatarPicker.tsx        # reusable photo picker (camera / library)
-context/
-  AppContext.tsx           # theme, language, shared relationship state
-lib/
-  data.ts                   # shared mock data + date/timezone helpers
-  storage.ts                 # AsyncStorage + persistent photo file helpers
-```
-
-## Running it locally
+Install Node.js and an Expo Go version compatible with this project's Expo SDK 57. The submitted development environment used Node 24.19.0. Keep the committed package versions and lockfile when first testing.
 
 ```bash
 git clone https://github.com/shankao1008-ui/closer-app.git
 cd closer-app
-npm install
-npx expo start
+npm ci
+npx expo start --go --tunnel
 ```
 
-Then scan the QR code with Expo Go on your phone.
+Scan the QR code printed by **this running terminal** with your phone. Leave the terminal running and the computer awake. A GitHub repository URL is source code, not an app launch link. A tunnel lets your partner connect from another network, including another country. If the tunnel fails, there is no working QR code yet; resolve that error first. See [Expo CLI networking documentation](https://docs.expo.dev/more/expo-cli/#tunneling).
 
----
+For a phone on the same Wi-Fi as its computer, use `npx expo start --go --lan` instead. Each partner can also clone this repository and run their own server.
 
-## What's not done yet
+## Sign in and pair
 
-I'm upfront about this — right now everything runs on one phone at a time, nothing actually syncs between two people yet. Still on my list:
+1. Open Closer through the current QR code.
+2. The terminal prints `[Closer] Supabase Redirect URL:` followed by the actual callback URL. The project owner must add that exact URL under Supabase **Authentication → URL Configuration → Redirect URLs**. Each separately running server may have a different URL.
+3. Request a fresh email sign-in link after the redirect is configured. Open it on the phone running Closer. Keep the server running. Do not share that email link with your partner.
+4. Complete your name, birthday and profile photo if requested. Existing completed accounts can skip onboarding and edit their profile in Settings.
+5. Use separate email accounts: one partner creates a pairing code; the other joins with that code.
 
-- Real pairing between two devices (invite code / QR code)
-- Actually syncing messages and photos between partners
-- Push notifications
-- A real home-screen widget on iOS/Android for the live photo feature
+The app currently points at the existing shared Supabase backend in `lib/supabase.ts` using a client publishable key. Joining this test project does not require a service-role key or database administrator credentials. Do not replace it with an administrative key. See [Supabase setup](SUPABASE_SETUP.md) before changing backends.
+
+## Source features
+
+- Home: time zones, next meeting, quick reactions, hearts, wishes, Our Moment / Our Overlap and wallet entry.
+- Chat: Supabase-backed text messaging.
+- Live Photo: photo upload and paired partner photo retrieval.
+- Us / Settings: profiles, relationship settings, themes and nine language dictionaries.
+- Wishes: add ideas, filter all / to do / completed, mark completed and move back to to do.
+- Our Moment: choose your photo and send it; Our Overlap: save availability.
+
+These are features present in the source; this upload preparation did not perform a two-phone end-to-end test against the live backend.
+
+## Current limits
+
+- `components/CallPreview.tsx` is a call preview. This snapshot does **not** place voice/video calls or notify your partner of an incoming call.
+- Sending a Live Photo to the partner's in-app page does not install a native home-screen widget.
+- Wallet actions are separate from actual transfer confirmation in the wallet.
+- The SQL files included here are follow-up scripts, not a complete fresh-database bootstrap. The existing shared backend must have the feature tables and functions installed.
+- Old Expo update/APK links from the earlier README have been removed because they do not establish that this snapshot is installed.
+
+## Project
+
+Expo SDK 57 / React Native 0.86.3 / React 19.2.3 / TypeScript / Supabase / Expo Router.
+
+Screens are in `app/`, shared state in `context/`, reusable UI in `components/`, and API helpers / translations in `lib/`.
+
+This project was designed and iterated by its creator with AI assistance.

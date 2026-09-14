@@ -1,173 +1,305 @@
+import CallPreview from "../../components/CallPreview";
+import { callText } from "../../lib/callText";
 import { LinearGradient } from "expo-linear-gradient";
-import { ChevronDown, Moon, Plane, Send, Sparkles, X } from "lucide-react-native";
-import React, { useEffect, useMemo, useRef, useState } from "react";
+import AsyncStorage from "@react-native-async-storage/async-storage";
+import { useRouter } from "expo-router";
+import { ArrowLeft, MoreVertical, Phone, Video } from "lucide-react-native";
+import React, { useCallback, useEffect, useRef, useState } from "react";
 import {
-  FlatList, KeyboardAvoidingView,
+  Alert,
+  FlatList,
+  KeyboardAvoidingView,
   Modal,
   Platform,
   Pressable,
   StyleSheet,
   Text,
   TextInput,
+  Switch,
   View,
 } from "react-native";
-import { LOCALE_MAP, useApp } from "../../context/AppContext";
-import { REL, diffParts, getNextMonthlyOccurrence, getZonedParts } from "../../lib/data";
-import { loadJSON, saveJSON } from "../../lib/storage";
-
-type Message = { id: string; sender: "me" | "partner"; content: string; time: string };
-
-const INITIAL_MESSAGES: Message[] = [];
+import AvatarPicker from "../../components/AvatarPicker";
+import { useApp } from "../../context/AppContext";
+import { clearChatMessages, sendMessage, subscribeMessages, type ChatMessage } from "../../lib/chat";
+import { getZonedParts } from "../../lib/data";
 
 export default function ChatScreen() {
-  const { colors, t, lang, partner, setPartnerName, monthlyDays } = useApp();
+  const { 
+    colors, t, lang, 
+    partnerName, setPartnerName, partner, partnerAvatarUri, setPartnerAvatarUri,
+    myAvatarUri,
+    uid,
+    coupleId,
+  } = useApp();
+  const callCopy = callText(lang);
+  const [callMode, setCallMode] = useState<"voice" | "video" | null>(null);
+  useEffect(() => { setCallMode(null); }, [uid, coupleId]);
+  const router = useRouter();
   const styles = makeStyles(colors);
-  const [now, setNow] = useState(new Date());
-  const [messages, setMessages] = useState<Message[]>(INITIAL_MESSAGES);
-  const [messagesLoaded, setMessagesLoaded] = useState(false);
-  const [input, setInput] = useState("");
-  const [editingName, setEditingName] = useState(false);
-  const [nameDraft, setNameDraft] = useState(partner.name);
-  const listRef = useRef<FlatList>(null);
+  const [now] = useState(new Date());
+  const [messages, setMessages] = useState<ChatMessage[]>([]);
+  const [inputText, setInputText] = useState("");
+  const [sending, setSending] = useState(false);
+  const [menuVisible, setMenuVisible] = useState(false);
+  const [clearing, setClearing] = useState(false);
+  const [chatNotifications, setChatNotifications] = useState(true);
+  const flatListRef = useRef<FlatList>(null);
 
   useEffect(() => {
-    const timer = setInterval(() => setNow(new Date()), 30000);
-    return () => clearInterval(timer);
+    AsyncStorage.getItem("closer_app:chat_notifications_enabled").then((value) => {
+      if (value !== null) setChatNotifications(value === "true");
+    });
   }, []);
 
-  // 讀取上次的聊天紀錄
-  useEffect(() => {
-    (async () => {
-      const saved = await loadJSON<Message[] | null>("chatMessages", null);
-      if (saved && saved.length) setMessages(saved);
-      setMessagesLoaded(true);
-    })();
-  }, []);
-
-  // 訊息改變時自動存檔
-  useEffect(() => {
-    if (!messagesLoaded) return;
-    saveJSON("chatMessages", messages);
-  }, [messagesLoaded, messages]);
-
-  const locale = LOCALE_MAP[lang] || "en-US";
-  const partnerParts = getZonedParts(now, partner.tz, locale);
-  const meetingCd = diffParts(REL.nextMeeting.date, now);
-  const monthlyInfo = getNextMonthlyOccurrence(monthlyDays, now);
-
-  const reminder = useMemo(() => {
-    if (partnerParts.hour >= 23 || partnerParts.hour < 5) return { Icon: Moon, text: t("lateNightReminder") };
-    if (monthlyInfo && monthlyInfo.diffDays <= 3) return { Icon: Sparkles, text: t("monthlyReminder", { d: monthlyInfo.diffDays }) };
-    if (meetingCd.days <= 7) return { Icon: Plane, text: t("meetingReminder", { d: meetingCd.days }) };
-    return null;
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [partnerParts.hour, monthlyInfo, meetingCd.days]);
-
-  const sendMessage = () => {
-    if (!input.trim()) return;
-    setMessages((m) => [...m, { id: String(Date.now()), sender: "me", content: input.trim(), time: "現在" }]);
-    setInput("");
-    setTimeout(() => listRef.current?.scrollToEnd({ animated: true }), 50);
+  const toggleChatNotifications = async (enabled: boolean) => {
+    setChatNotifications(enabled);
+    await AsyncStorage.setItem("closer_app:chat_notifications_enabled", String(enabled));
   };
 
-  const saveNickname = () => {
-    if (nameDraft.trim()) setPartnerName(nameDraft.trim());
-    setEditingName(false);
+  const confirmClearChat = () => {
+    setMenuVisible(false);
+    Alert.alert(
+      lang === "zh-Hant" ? "清除聊天紀錄？" : "Clear chat history?",
+      lang === "zh-Hant" ? "這會刪除你們雙方的所有訊息，而且無法復原。" : "This deletes all messages for both of you and cannot be undone.",
+      [
+        { text: lang === "zh-Hant" ? "取消" : "Cancel", style: "cancel" },
+        {
+          text: lang === "zh-Hant" ? "清除" : "Clear",
+          style: "destructive",
+          onPress: async () => {
+            if (!coupleId) return;
+            setClearing(true);
+            try {
+              await clearChatMessages(coupleId);
+              setMessages([]);
+            } catch (error: any) {
+              Alert.alert(
+                lang === "zh-Hant" ? "無法清除聊天紀錄" : "Unable to clear chat",
+                error?.message ?? (lang === "zh-Hant" ? "請稍後再試" : "Please try again later")
+              );
+            } finally {
+              setClearing(false);
+            }
+          },
+        },
+      ]
+    );
+  };
+
+  useEffect(() => {
+    if (!uid || !coupleId) {
+      setMessages([]);
+      return;
+    }
+
+    const unsub = subscribeMessages(
+      uid,
+      coupleId,
+      (newMessages) => {
+        setMessages(newMessages);
+      }
+    );
+
+    return () => unsub();
+  }, [uid, coupleId]);
+
+  useEffect(() => {
+    if (messages.length > 0) {
+      setTimeout(() => {
+        flatListRef.current?.scrollToEnd({ animated: true });
+      }, 100);
+    }
+  }, [messages]);
+
+  const partnerParts = getZonedParts(now, partner.tz, lang);
+
+  const handleSend = useCallback(async () => {
+    const text = inputText.trim();
+    if (!text) return;
+    setSending(true);
+    try {
+      if (!uid || !coupleId) {
+        Alert.alert("尚未配對", "請先和伴侶完成配對");
+        return;
+      }
+
+      await sendMessage(text, uid, coupleId);
+      setInputText("");
+    } catch (e) {
+      Alert.alert("發送失敗", "請稍後再試");
+    } finally {
+      setSending(false);
+    }
+  }, [inputText, uid, coupleId]);
+
+  const renderMessage = ({ item }: { item: ChatMessage }) => {
+    const isMe = item.senderId === "me";
+    return (
+      <View style={[styles.messageRow, isMe ? styles.messageRowMe : styles.messageRowPartner]}>
+        {!isMe && (
+          <AvatarPicker
+            uri={partnerAvatarUri}
+            onChange={setPartnerAvatarUri}
+            initials={partner.avatar}
+            size={28}
+            bgColor={colors.lavenderDeep}
+          />
+        )}
+        <View
+          style={[
+            styles.bubble,
+            isMe
+              ? [styles.bubbleMe, { backgroundColor: colors.primary }]
+              : [styles.bubblePartner, { backgroundColor: colors.bubblePartnerBg }],
+          ]}
+        >
+          <Text style={[styles.messageText, { color: isMe ? "#fff" : colors.ink }]}>
+            {item.text}
+          </Text>
+          <Text style={[styles.messageTime, { color: isMe ? "rgba(255,255,255,0.7)" : colors.inkSoft }]}>
+            {new Date(item.timestamp).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
+          </Text>
+        </View>
+        {isMe && (
+          <AvatarPicker
+            uri={myAvatarUri}
+            onChange={() => {}}
+            initials={"我"}
+            size={28}
+            bgColor={colors.primary}
+          />
+        )}
+      </View>
+    );
   };
 
   return (
-    <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === "ios" ? "padding" : undefined} keyboardVerticalOffset={90}>
+    <View style={{ flex: 1 }}>
       <LinearGradient colors={colors.screenBg as any} style={StyleSheet.absoluteFill} />
-
-      {/* header */}
-      <View style={styles.header}>
-        <View style={[styles.avatar, { backgroundColor: colors.lavenderDeep }]}>
-          <Text style={styles.avatarText}>{partner.avatar}</Text>
-        </View>
-        <Pressable onPress={() => { setNameDraft(partner.name); setEditingName(true); }} style={{ flex: 1 }}>
-          <View style={{ flexDirection: "row", alignItems: "center", gap: 3 }}>
-            <Text style={[styles.name, { color: colors.ink }]}>{partner.name}</Text>
-            <ChevronDown size={13} color={colors.inkSoft} />
-          </View>
-          <Text style={{ fontSize: 10.5, color: colors.inkSoft }}>{partner.cityName} {partnerParts.timeStr}</Text>
+      
+      {/* 頂部導航欄 - 顯示伴侶（小明）的資訊，點擊可編輯 */}
+      <View style={[styles.header, { backgroundColor: colors.navBg, borderBottomColor: colors.hairline }]}>
+        <Pressable onPress={() => router.back()} style={styles.backBtn}>
+          <ArrowLeft size={22} color={colors.ink} />
         </Pressable>
-      </View>
-
-      {reminder && (
-        <View style={[styles.reminder, { backgroundColor: colors.primary + "20" }]}>
-          <reminder.Icon size={15} color={colors.primaryDeep} />
-          <Text style={{ fontSize: 11.5, color: colors.ink, marginLeft: 8, flex: 1 }}>{reminder.text}</Text>
-        </View>
-      )}
-
-      <FlatList
-        ref={listRef}
-        data={messages}
-        keyExtractor={(m) => m.id}
-        contentContainerStyle={{ padding: 16, gap: 10 }}
-        renderItem={({ item }) => <MessageBubble message={item} colors={colors} />}
-        onContentSizeChange={() => listRef.current?.scrollToEnd({ animated: false })}
-      />
-
-      <View style={[styles.inputBar, { backgroundColor: colors.cardBg, borderTopColor: colors.cardBorder }]}>
-        <TextInput
-          value={input}
-          onChangeText={setInput}
-          placeholder={t("chatPlaceholder", { name: partner.name })}
-          placeholderTextColor={colors.inkSoft}
-          style={[styles.input, { backgroundColor: colors.inputBg, color: colors.ink }]}
-          onSubmitEditing={sendMessage}
-          returnKeyType="send"
-        />
-        <Pressable onPress={sendMessage} style={[styles.sendBtn, { backgroundColor: colors.primary }]}>
-          <Send size={16} color="#fff" />
-        </Pressable>
-      </View>
-
-      {/* edit nickname modal */}
-      <Modal visible={editingName} transparent animationType="fade" onRequestClose={() => setEditingName(false)}>
-        <Pressable style={styles.modalBackdrop} onPress={() => setEditingName(false)}>
-          <Pressable style={[styles.nameCard, { backgroundColor: colors.cardBg }]} onPress={(e) => e.stopPropagation()}>
-            <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginBottom: 12 }}>
-              <Text style={{ fontWeight: "700", fontSize: 14, color: colors.ink }}>✏️ {t("editNicknameTitle")}</Text>
-              <Pressable onPress={() => setEditingName(false)}><X size={16} color={colors.inkSoft} /></Pressable>
-            </View>
-            <TextInput
-              value={nameDraft}
-              onChangeText={setNameDraft}
-              maxLength={12}
-              autoFocus
-              style={[styles.nameInput, { backgroundColor: colors.inputBg, color: colors.ink, borderColor: colors.cardBorder }]}
+        
+        <Pressable 
+          onPress={() => {
+            Alert.prompt(
+              "編輯伴侶暱稱",
+              "請輸入伴侶的名字",
+              [
+                { text: "取消", style: "cancel" },
+                { 
+                  text: "儲存", 
+                  onPress: (text?: string) => {
+                    if (text && text.trim()) {
+                      setPartnerName(text.trim());
+                    }
+                  }
+                }
+              ],
+              "plain-text",
+              partnerName
+            );
+          }}
+          style={styles.headerCenter}
+        >
+          <View style={{ flexDirection: "row", alignItems: "center", gap: 8, width: "100%" }}>
+            <AvatarPicker
+              uri={partnerAvatarUri}
+              onChange={setPartnerAvatarUri}
+              initials={partner.avatar}
+              size={36}
+              bgColor={colors.lavenderDeep}
             />
-            <View style={{ flexDirection: "row", gap: 8, marginTop: 14 }}>
-              <Pressable onPress={() => setEditingName(false)} style={[styles.modalBtn, { backgroundColor: colors.hairline }]}>
-                <Text style={{ color: colors.inkSoft, fontWeight: "700", fontSize: 13 }}>{t("cancelLabel")}</Text>
-              </Pressable>
-              <Pressable onPress={saveNickname} style={[styles.modalBtn, { backgroundColor: colors.primary }]}>
-                <Text style={{ color: "#fff", fontWeight: "700", fontSize: 13 }}>{t("saveLabel")}</Text>
-              </Pressable>
+            <View style={{ flex: 1, minWidth: 0 }}>
+              <Text numberOfLines={1} style={[styles.headerName, { color: colors.ink }]}>{partnerName}</Text>
+              <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
+                <View style={[styles.onlineDot, { backgroundColor: "#4CD48A" }]} />
+                <Text numberOfLines={1} style={[styles.headerSub, { color: colors.inkSoft }]}>
+                  {t("online")} · {partner.city} {partnerParts.timeStr}
+                </Text>
+              </View>
             </View>
+          </View>
+        </Pressable>
+        
+        <Pressable accessibilityRole="button" accessibilityLabel={callCopy.voice}
+          onPress={() => { setMenuVisible(false); setCallMode("voice"); }} style={styles.headerRight}>
+          <Phone size={21} color={colors.primary} />
+        </Pressable>
+        <Pressable accessibilityRole="button" accessibilityLabel={callCopy.video}
+          onPress={() => { setMenuVisible(false); setCallMode("video"); }} style={styles.headerRight}>
+          <Video size={23} color={colors.primary} />
+        </Pressable>
+        <Pressable onPress={() => setMenuVisible(true)} style={styles.headerRight}>
+          <MoreVertical size={20} color={colors.ink} />
+        </Pressable>
+      </View>
+
+      <CallPreview mode={callMode} lang={lang} partnerName={partnerName}
+        avatarUri={partnerAvatarUri} accent={colors.primary} onClose={() => setCallMode(null)} />
+      <Modal visible={menuVisible} transparent animationType="fade" onRequestClose={() => setMenuVisible(false)}>
+        <Pressable style={styles.menuBackdrop} onPress={() => setMenuVisible(false)}>
+          <Pressable style={[styles.menuCard, { backgroundColor: colors.cardBg, borderColor: colors.cardBorder }]} onPress={(event) => event.stopPropagation()}>
+            <View style={styles.menuRow}>
+              <View style={{ flex: 1 }}>
+                <Text style={[styles.menuTitle, { color: colors.ink }]}>{lang === "zh-Hant" ? "聊天通知" : "Chat notifications"}</Text>
+                <Text style={[styles.menuSubtitle, { color: colors.inkSoft }]}>{chatNotifications ? (lang === "zh-Hant" ? "已開啟" : "On") : (lang === "zh-Hant" ? "已關閉" : "Off")}</Text>
+              </View>
+              <Switch
+                value={chatNotifications}
+                onValueChange={toggleChatNotifications}
+                trackColor={{ false: colors.hairline, true: colors.primary }}
+              />
+            </View>
+            <Pressable disabled={clearing || !coupleId} onPress={confirmClearChat} style={[styles.clearChatButton, { borderTopColor: colors.hairline }]}>
+              <Text style={{ color: "#D94A4A", fontWeight: "700" }}>
+                {clearing ? (lang === "zh-Hant" ? "清除中…" : "Clearing…") : (lang === "zh-Hant" ? "清除聊天紀錄" : "Clear chat history")}
+              </Text>
+            </Pressable>
           </Pressable>
         </Pressable>
       </Modal>
-    </KeyboardAvoidingView>
-  );
-}
 
-function MessageBubble({ message, colors }: { message: Message; colors: any }) {
-  const isMe = message.sender === "me";
-  return (
-    <View style={{ alignItems: isMe ? "flex-end" : "flex-start" }}>
-      <View
-        style={{
-          maxWidth: "72%", paddingHorizontal: 13, paddingVertical: 9, borderRadius: 16,
-          borderBottomRightRadius: isMe ? 4 : 16, borderBottomLeftRadius: isMe ? 16 : 4,
-          backgroundColor: isMe ? colors.primary : colors.bubblePartnerBg,
-        }}
+      <FlatList
+        ref={flatListRef}
+        data={messages}
+        keyExtractor={(item) => item.id}
+        renderItem={renderMessage}
+        contentContainerStyle={styles.messageList}
+        showsVerticalScrollIndicator={false}
+        inverted={false}
+      />
+
+      <KeyboardAvoidingView
+        behavior={Platform.OS === "ios" ? "padding" : undefined}
+        keyboardVerticalOffset={Platform.OS === "ios" ? 90 : 0}
       >
-        <Text style={{ color: isMe ? "#fff" : colors.ink, fontSize: 13, lineHeight: 18 }}>{message.content}</Text>
-        <Text style={{ color: isMe ? "#ffffffaa" : colors.inkSoft, fontSize: 9, marginTop: 3, textAlign: "right" }}>{message.time}</Text>
-      </View>
+        <View style={[styles.inputContainer, { borderTopColor: colors.hairline, backgroundColor: colors.cardBg }]}>
+          <TextInput
+            value={inputText}
+            onChangeText={setInputText}
+            placeholder={t("chatPlaceholder", { name: partnerName })}
+            placeholderTextColor={colors.inkSoft}
+            style={[styles.input, { backgroundColor: colors.inputBg, color: colors.ink }]}
+            multiline
+          />
+          <Pressable
+            onPress={handleSend}
+            disabled={sending || !inputText.trim()}
+            style={[
+              styles.sendBtn,
+              { backgroundColor: inputText.trim() ? colors.primary : colors.hairline },
+            ]}
+          >
+            <Text style={{ color: inputText.trim() ? "#fff" : colors.inkSoft, fontSize: 16, fontWeight: "700" }}>
+              發送
+            </Text>
+          </Pressable>
+        </View>
+      </KeyboardAvoidingView>
     </View>
   );
 }
@@ -175,19 +307,130 @@ function MessageBubble({ message, colors }: { message: Message; colors: any }) {
 function makeStyles(colors: any) {
   return StyleSheet.create({
     header: {
-      flexDirection: "row", alignItems: "center", gap: 10, paddingHorizontal: 16,
-      paddingTop: Platform.OS === "ios" ? 60 : 32, paddingBottom: 12,
+      flexDirection: "row",
+      alignItems: "center",
+      justifyContent: "space-between",
+      paddingHorizontal: 12,
+      paddingTop: Platform.OS === "ios" ? 50 : 12,
+      paddingBottom: 10,
+      borderBottomWidth: 1,
     },
-    avatar: { width: 36, height: 36, borderRadius: 18, alignItems: "center", justifyContent: "center" },
-    avatarText: { color: "#fff", fontWeight: "700", fontSize: 13 },
-    name: { fontWeight: "700", fontSize: 14 },
-    reminder: { flexDirection: "row", alignItems: "center", marginHorizontal: 16, borderRadius: 14, padding: 10, marginBottom: 4 },
-    inputBar: { flexDirection: "row", alignItems: "center", gap: 8, padding: 12, borderTopWidth: 1 },
-    input: { flex: 1, borderRadius: 100, paddingHorizontal: 16, paddingVertical: 10, fontSize: 13 },
-    sendBtn: { width: 40, height: 40, borderRadius: 20, alignItems: "center", justifyContent: "center" },
-    modalBackdrop: { flex: 1, backgroundColor: "rgba(20,14,20,0.5)", alignItems: "center", justifyContent: "center", padding: 24 },
-    nameCard: { width: "100%", borderRadius: 22, padding: 18 },
-    nameInput: { borderRadius: 12, borderWidth: 1, paddingHorizontal: 14, paddingVertical: 11, fontSize: 14 },
-    modalBtn: { flex: 1, paddingVertical: 11, borderRadius: 14, alignItems: "center" },
+    backBtn: {
+      padding: 4,
+    },
+    headerCenter: {
+      flex: 1,
+      minWidth: 0,
+      paddingHorizontal: 6,
+    },
+    headerName: {
+      fontSize: 16,
+      fontWeight: "700",
+    },
+    headerSub: {
+      fontSize: 11,
+    },
+    headerRight: {
+      width: 44, height: 44, alignItems: "center", justifyContent: "center",
+    },
+    menuBackdrop: {
+      flex: 1,
+      backgroundColor: "rgba(0,0,0,0.18)",
+      alignItems: "flex-end",
+      paddingTop: Platform.OS === "ios" ? 92 : 58,
+      paddingRight: 14,
+    },
+    menuCard: {
+      width: 250,
+      borderRadius: 16,
+      borderWidth: 1,
+      overflow: "hidden",
+      shadowColor: "#000",
+      shadowOpacity: 0.16,
+      shadowRadius: 14,
+      shadowOffset: { width: 0, height: 6 },
+      elevation: 6,
+    },
+    menuRow: {
+      flexDirection: "row",
+      alignItems: "center",
+      paddingHorizontal: 16,
+      paddingVertical: 14,
+    },
+    menuTitle: { fontSize: 14, fontWeight: "700" },
+    menuSubtitle: { fontSize: 11, marginTop: 2 },
+    clearChatButton: {
+      paddingHorizontal: 16,
+      paddingVertical: 15,
+      borderTopWidth: 1,
+    },
+    onlineDot: {
+      width: 8,
+      height: 8,
+      borderRadius: 4,
+    },
+    messageList: {
+      paddingHorizontal: 16,
+      paddingTop: 12,
+      paddingBottom: 8,
+      flexGrow: 1,
+    },
+    messageRow: {
+      flexDirection: "row",
+      alignItems: "flex-end",
+      marginBottom: 8,
+      gap: 6,
+    },
+    messageRowMe: {
+      justifyContent: "flex-end",
+    },
+    messageRowPartner: {
+      justifyContent: "flex-start",
+    },
+    bubble: {
+      maxWidth: "75%",
+      paddingHorizontal: 12,
+      paddingVertical: 8,
+      borderRadius: 16,
+    },
+    bubbleMe: {
+      borderBottomRightRadius: 4,
+    },
+    bubblePartner: {
+      borderBottomLeftRadius: 4,
+    },
+    messageText: {
+      fontSize: 14,
+      lineHeight: 20,
+    },
+    messageTime: {
+      fontSize: 9,
+      marginTop: 4,
+      alignSelf: "flex-end",
+    },
+    inputContainer: {
+      flexDirection: "row",
+      alignItems: "flex-end",
+      paddingHorizontal: 12,
+      paddingVertical: 8,
+      borderTopWidth: 1,
+      gap: 8,
+    },
+    input: {
+      flex: 1,
+      borderRadius: 20,
+      paddingHorizontal: 14,
+      paddingVertical: 8,
+      fontSize: 14,
+      maxHeight: 100,
+      minHeight: 36,
+    },
+    sendBtn: {
+      paddingHorizontal: 16,
+      height: 36,
+      borderRadius: 18,
+      alignItems: "center",
+      justifyContent: "center",
+    },
   });
 }
