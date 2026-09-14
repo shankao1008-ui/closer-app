@@ -1,10 +1,82 @@
 # 靠近 Closer
 
-A React Native / Expo app for long-distance couples. This source snapshot comes from the latest uploaded Expo Go project (September 2026).
+**A little closer, even when you're far apart.**
 
-## Run on your phone
+Closer is a mobile app I'm building for long-distance couples. It brings everyday conversations, shared photos, important dates and future plans into one space designed for two people.
 
-Install Node.js and an Expo Go version compatible with this project's Expo SDK 57. The submitted development environment used Node 24.19.0. Keep the committed package versions and lockfile when first testing.
+I wanted to make something that reflects the small things that matter in a long-distance relationship: knowing what time it is where your partner lives, counting down to your next visit, sharing a photo from your day, or simply saying “I miss you.”
+
+The project has grown from an early interface with local data into an Expo app with Supabase authentication, partner pairing, messaging and photo-sharing code. I'm continuing to test it on real devices and improve the experience based on what happens when people use it.
+
+## Inside Closer
+
+### 🏠 Home — your relationship at a glance
+
+See both cities and time zones, count down to your next meeting, and send quick emoji reactions. Home also brings together shared activities and a one-tap **“I miss you”** heart for your partner to see in the app.
+
+### 💬 Chat — everyday conversations
+
+A dedicated conversation with your paired partner, backed by Supabase. Voice and video buttons have been added to the interface; connecting actual calls is still on the roadmap.
+
+### 📷 Live Photo — share a piece of your day
+
+Choose or take a photo, add a caption, and send it to your partner. The Live Photo page includes both the sending area and a place to see the latest photo received from your partner.
+
+Here, “Live Photo” means the app's photo-sharing feature, rather than Apple's animated Live Photos format.
+
+### 🖼️ Our Moment — two photos, one shared moment
+
+Tap your photo area to choose an image, then use the send button below. The idea is to bring a photo from each partner into the same shared moment, even when you're in different places.
+
+### 🕒 Our Overlap — make time for each other
+
+Save your availability with your time zone so you can share when you're free to chat. This feature is being developed around a simple question: “When do we both have time for us?”
+
+### 💌 Shared wishes — things to look forward to
+
+Collect places you want to visit, date ideas and things you want to do together. View all wishes, see what's still to do, mark a wish completed, or move it back to your to-do list.
+
+### 👩‍❤️‍👨 Us & Settings — make it yours
+
+Set your name, birthday and profile photo, manage your pairing, and personalize your relationship dates, cities and appearance.
+
+The app includes translation dictionaries for Traditional Chinese, Simplified Chinese, English, Japanese, Korean, Spanish, French, German and Thai. Language consistency across screens is an ongoing part of testing.
+
+### 👛 Cake Wallet shortcut
+
+Open Cake Wallet from Home, with Bitcoin and Monero as the initial focus. The shortcut opens the wallet; it does not automatically fill in your partner's address or complete a transfer. Transaction details and confirmation stay in the wallet app.
+
+## How the project has developed
+
+I've been working on both the product design and the details needed to make it usable:
+
+- Moving from the earlier Firebase approach to Supabase.
+- Adding Email Magic Link sign-in, profile setup and partner pairing.
+- Working through login callbacks, loading loops and profile-saving permissions.
+- Connecting messaging and photo-sharing flows to the backend.
+- Improving how names and avatars map to each partner.
+- Expanding translations and refining buttons, spacing, loading states and error messages.
+- Adding shared moments, availability, hearts and a clearer wish-list workflow.
+- Moving the project to Expo SDK 57 and testing through Expo Go on a physical phone.
+
+I lead the product direction, visual choices and testing, and use AI tools to help implement and debug the code. Closer is an ongoing personal project, and this repository documents that progress.
+
+## Development status
+
+The features above describe the current source. Full two-device testing is still ongoing; their presence in the code is not a guarantee that every flow is finished.
+
+Next priorities:
+
+- [ ] Finish testing sign-in, pairing, messaging and photo delivery between two accounts.
+- [ ] Connect real voice and video calls. The current call screen is a preview only.
+- [ ] Build a native home-screen photo widget. Photos currently appear inside Closer.
+- [ ] Add reliable background notifications.
+- [ ] Continue improving translations, accessibility and error recovery.
+- [ ] Bring the complete database migrations into the repository for reproducible setup.
+
+## Try it on your phone
+
+Use Node.js and an Expo Go version compatible with Expo SDK 57. My development environment used Node 24.19.0. Start with the committed dependency versions and lockfile.
 
 ```bash
 git clone https://github.com/shankao1008-ui/closer-app.git
@@ -13,43 +85,49 @@ npm ci
 npx expo start --go --tunnel
 ```
 
-Scan the QR code printed by **this running terminal** with your phone. Leave the terminal running and the computer awake. A GitHub repository URL is source code, not an app launch link. A tunnel lets your partner connect from another network, including another country. If the tunnel fails, there is no working QR code yet; resolve that error first. See [Expo CLI networking documentation](https://docs.expo.dev/more/expo-cli/#tunneling).
+Scan the QR code in the terminal with your phone. Keep the terminal running and your computer awake while testing. The tunnel allows a partner on another network to connect too.
 
-For a phone on the same Wi-Fi as its computer, use `npx expo start --go --lan` instead. Each partner can also clone this repository and run their own server.
+For a phone on the same Wi-Fi as your computer:
 
-## Sign in and pair
+```bash
+npx expo start --go --lan
+```
 
-1. Open Closer through the current QR code.
-2. The terminal prints `[Closer] Supabase Redirect URL:` followed by the actual callback URL. The project owner must add that exact URL under Supabase **Authentication → URL Configuration → Redirect URLs**. Each separately running server may have a different URL.
-3. Request a fresh email sign-in link after the redirect is configured. Open it on the phone running Closer. Keep the server running. Do not share that email link with your partner.
-4. Complete your name, birthday and profile photo if requested. Existing completed accounts can skip onboarding and edit their profile in Settings.
-5. Use separate email accounts: one partner creates a pairing code; the other joins with that code.
+If the tunnel fails, resolve that error before sharing the QR code. The GitHub link contains the source; it is not a hosted version of the app.
 
-The app currently points at the existing shared Supabase backend in `lib/supabase.ts` using a client publishable key. Joining this test project does not require a service-role key or database administrator credentials. Do not replace it with an administrative key. See [Supabase setup](SUPABASE_SETUP.md) before changing backends.
+### Sign in and pair
 
-## Source features
+1. Open Closer using the current QR code.
+2. Find `[Closer] Supabase Redirect URL:` in the terminal. The Supabase project owner needs to add that exact URL to **Authentication → URL Configuration → Redirect URLs**.
+3. Request a fresh sign-in email and open the link on the phone running Closer.
+4. Complete your profile if prompted. Returning users with completed profiles can go straight into the app.
+5. Use separate email accounts: one person creates a pairing code and the other joins with it.
 
-- Home: time zones, next meeting, quick reactions, hearts, wishes, Our Moment / Our Overlap and wallet entry.
-- Chat: Supabase-backed text messaging.
-- Live Photo: photo upload and paired partner photo retrieval.
-- Us / Settings: profiles, relationship settings, themes and nine language dictionaries.
-- Wishes: add ideas, filter all / to do / completed, mark completed and move back to to do.
-- Our Moment: choose your photo and send it; Our Overlap: save availability.
+A new server address may require a new allowed redirect URL. Don't share your personal email sign-in link with your partner.
 
-These are features present in the source; this upload preparation did not perform a two-phone end-to-end test against the live backend.
+### Backend setup
 
-## Current limits
+This version points to the existing shared Supabase project in `lib/supabase.ts` using a client publishable key. The included SQL files are follow-up scripts, not a complete setup for an empty database. See [SUPABASE_SETUP.md](SUPABASE_SETUP.md) before connecting a different backend.
 
-- `components/CallPreview.tsx` is a call preview. This snapshot does **not** place voice/video calls or notify your partner of an incoming call.
-- Sending a Live Photo to the partner's in-app page does not install a native home-screen widget.
-- Wallet actions are separate from actual transfer confirmation in the wallet.
-- The SQL files included here are follow-up scripts, not a complete fresh-database bootstrap. The existing shared backend must have the feature tables and functions installed.
-- Old Expo update/APK links from the earlier README have been removed because they do not establish that this snapshot is installed.
+## Built with
 
-## Project
+- **React Native 0.86.3** and **React 19.2.3**
+- **Expo SDK 57** and **Expo Router**
+- **TypeScript**
+- **Supabase** for authentication, database, Realtime and photo storage
+- **AsyncStorage** for local persistence
+- **Expo Image Picker**, **Image Manipulator** and **File System** for photo workflows
 
-Expo SDK 57 / React Native 0.86.3 / React 19.2.3 / TypeScript / Supabase / Expo Router.
+## Project structure
 
-Screens are in `app/`, shared state in `context/`, reusable UI in `components/`, and API helpers / translations in `lib/`.
+| Folder | Purpose |
+| --- | --- |
+| `app/` | Screens and navigation routes |
+| `components/` | Reusable interface components |
+| `context/` | Shared app and account state |
+| `lib/` | Backend helpers, translations and feature logic |
+| `assets/` | App icons and images |
 
-This project was designed and iterated by its creator with AI assistance.
+---
+
+Built by **Sara Kao 高珮珊** — a personal project about staying connected across distance.
