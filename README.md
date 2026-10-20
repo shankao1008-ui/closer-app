@@ -62,6 +62,10 @@ I've been working on both the product design and the details needed to make it u
 
 I lead the product direction, visual choices and testing, and use AI tools to help implement and debug the code. Closer is an ongoing personal project, and this repository documents that progress.
 
+## October interface refresh
+
+Home now features a shared-space hero, paired avatars, a clear invitation for unpaired users, and direct photo/chat shortcuts. Colorful heart, moment and overlap cards replace repetitive rows. Both appearance themes and the tab bar have been refreshed. New Home copy covers all nine supported languages; unpaired users no longer see a fictional online partner or shared-city details.
+
 ## Development status
 
 The features above describe the current source. Full two-device testing is still ongoing; their presence in the code is not a guarantee that every flow is finished.

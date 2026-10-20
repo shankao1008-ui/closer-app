@@ -19,12 +19,12 @@ function Cards(){
   finally{lock.current=false;if(alive.current)setBusy(false);}
  };
  const received=data.filter(h=>h.recipient===uid).sort((a,b)=>b.sent_at.localeCompare(a.sent_at))[0];
- const card={backgroundColor:colors.cardBg,borderRadius:22,padding:18,gap:10};
+ const card={backgroundColor:colors.cardBg,borderRadius:28,padding:22,gap:12};
  return <View style={{gap:12}}>
-  <View style={card}>
+  <View style={{...card,backgroundColor:"#FCE3E1"}}>
    <View style={{flexDirection:'row',alignItems:'center',gap:14}}>
     <View style={{flex:1,gap:6}}><Text style={{color:colors.ink,fontWeight:'700',fontSize:18}}>{c.heart}</Text><Text style={{color:colors.inkSoft,fontSize:13}}>{c.hint}</Text></View>
-    <Pressable accessibilityRole="button" accessibilityLabel={c.send} accessibilityState={{disabled:!uid||!coupleId||busy,busy}} disabled={!uid||!coupleId||busy} onPress={()=>{void send();}} style={({pressed})=>({width:64,height:64,borderRadius:32,backgroundColor:colors.primary,alignItems:'center',justifyContent:'center',opacity:!coupleId||busy?0.45:pressed?0.7:1,transform:[{scale:pressed?0.94:1}]})}>
+    <Pressable accessibilityRole="button" accessibilityLabel={c.send} accessibilityState={{disabled:!uid||!coupleId||busy,busy}} disabled={!uid||!coupleId||busy} onPress={()=>{void send();}} style={({pressed})=>({width:76,height:76,borderRadius:27,backgroundColor:colors.primary,alignItems:'center',justifyContent:'center',opacity:!coupleId||busy?0.45:pressed?0.7:1,transform:[{scale:pressed?0.94:1}]})}>
      {busy?<ActivityIndicator color="#fff"/>:<Heart size={30} fill="#fff" color="#fff"/>}
     </Pressable>
    </View>

@@ -1,3 +1,5 @@
+import OurSpaceHero from "../../components/OurSpaceHero";
+import { homeDesignText } from "../../lib/homeDesignText";
 import HeartsWishesCards from "../../components/HeartsWishesCards";
 import TogetherCards from "../../components/TogetherCards";
 import CryptoTransferCard from "../../components/CryptoTransferCard";
@@ -49,6 +51,7 @@ export default function HomeScreen() {
     rel
   } = useApp();
   const router = useRouter();
+  const copy = homeDesignText(lang);
   const [now, setNow] = useState(new Date());
   const [weather, setWeather] = useState<{ me: any; partner: any }>({ me: null, partner: null });
   const [pickerIndex, setPickerIndex] = useState<number | null>(null);
@@ -128,58 +131,13 @@ export default function HomeScreen() {
     <View style={{ flex: 1 }}>
       <LinearGradient colors={colors.screenBg as any} style={StyleSheet.absoluteFill} />
       <ScrollView contentContainerStyle={styles.body} showsVerticalScrollIndicator={false}>
-        {!coupleId && <Pressable accessibilityRole="button" onPress={() => router.push("/pairing")}
-          style={{ backgroundColor: colors.primary, borderRadius: 24, padding: 18, marginBottom: 16, alignItems: "center" }}>
-          <Text style={{ color: "white", fontSize: 16, fontWeight: "700" }}>{lang.startsWith("zh") ? "與伴侶配對" : "Pair with your partner"}</Text>
-          <Text style={{ color: "white", marginTop: 6 }}>{lang.startsWith("zh") ? "產生配對碼，或輸入對方的配對碼" : "Create a pairing code or enter your partner’s code"}</Text>
-        </Pressable>}
-        {/* top bar - 顯示伴侶（小明） */}
-        <View style={styles.topBar}>
-          <View style={{ flexDirection: "row", alignItems: "center", gap: 10 }}>
-            <AvatarPicker 
-              uri={partnerAvatarUri} 
-              onChange={setPartnerAvatarUri} 
-              initials={partner.avatar} 
-              size={40} 
-              bgColor={colors.lavenderDeep} 
-            />
-            <View>
-              <Pressable 
-                onPress={() => {
-                  Alert.prompt(
-                    "編輯伴侶暱稱",
-                    "請輸入伴侶的名字",
-                    [
-                      { text: "取消", style: "cancel" },
-                      { 
-                        text: "儲存", 
-                        onPress: (text?: string) => {
-                          if (text && text.trim()) {
-                            setPartnerName(text.trim());
-                          }
-                        }
-                      }
-                    ],
-                    "plain-text",
-                    partnerName
-                  );
-                }}
-              >
-                <Text style={[styles.name, { color: colors.ink }]}>{partnerName}</Text>
-              </Pressable>
-              <View style={{ flexDirection: "row", alignItems: "center", gap: 4 }}>
-                <View style={styles.onlineDot} />
-                <Text style={[styles.subtle, { color: colors.inkSoft }]}>{t("online")}</Text>
-              </View>
-            </View>
-          </View>
-          <Pressable onPress={() => router.push("/settings")} style={[styles.iconBtn, { backgroundColor: colors.chipBg }]}>
-            <Settings size={17} color={colors.ink} />
-          </Pressable>
-        </View>
-
-        {/* dual timezone card - 左邊小美，右邊小明 */}
-        <View style={styles.card}>
+        <OurSpaceHero />
+        <Text style={{ color: colors.ink, fontSize: 22, fontWeight: "800", marginTop: 10, letterSpacing: -0.4 }}>{copy.moments}</Text>
+        <HeartsWishesCards />
+        <TogetherCards />
+        {/* Only show shared information once a real partner is connected. */}
+        {coupleId && <View style={styles.card}>
+          <Text style={[styles.eyebrow, { color: colors.primaryDeep, marginBottom: 18 }]}>{copy.timezone}</Text>
           <View style={{ flexDirection: "row", justifyContent: "space-between" }}>
             <TzColumn 
               label={myName} 
@@ -216,12 +174,12 @@ export default function HomeScreen() {
               {t("distanceApart")} <Text style={{ fontWeight: "700", color: colors.ink }}>{distanceKm.toLocaleString()}</Text> {t("kmApartSuffix")}
             </Text>
           </View>
-        </View>
+        </View>}
 
         {/* For Habibi */}
         <View style={styles.card}>
           <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: 10 }}>
-            <Text style={[styles.eyebrow, { color: colors.inkSoft }]}>For Habibi</Text>
+            <Text style={[styles.eyebrow, { color: colors.inkSoft }]}>{copy.reactions}</Text>
             <Text style={{ fontSize: 9.5, color: colors.inkSoft }}>{t("longPressHint")}</Text>
           </View>
           <View style={{ flexDirection: "row", gap: 10 }}>
@@ -232,20 +190,20 @@ export default function HomeScreen() {
         </View>
 
         {/* countdown */}
-        <View style={styles.card}>
+        {coupleId && <View style={[styles.card, { backgroundColor: colors.chipBg }]}>
           <Text style={[styles.eyebrow, { color: colors.inkSoft }]}>{t("countdownTitle")}</Text>
           <View style={{ flexDirection: "row", alignItems: "center", gap: 16, marginTop: 8 }}>
             <HeartbeatRing pct={progressPct} colors={colors} />
             <View style={{ flex: 1 }}>
               <Text style={{ fontSize: 26, fontWeight: "700", color: colors.ink }}>
-                {meetingCd.days}d {meetingCd.hours}h
+                {rel.nextMeeting?.date ? `${meetingCd.days}d ${meetingCd.hours}h` : "—"}
               </Text>
               <View style={{ flexDirection: "row", alignItems: "center", gap: 4, marginTop: 2 }}>
                 <Plane size={12} color={colors.inkSoft} />
                 <Text style={{ fontSize: 12, color: colors.inkSoft }}>
                   {rel.nextMeeting?.date
   ? `${rel.nextMeeting.cityName || ""} · ${new Date(rel.nextMeeting.date).getMonth() + 1}/${new Date(rel.nextMeeting.date).getDate()}`
-  : "尚未設定下次見面日期"}
+  : copy.plan}
                 </Text>
               </View>
             </View>
@@ -254,9 +212,10 @@ export default function HomeScreen() {
             <MiniStat label={t("monthlyAnniversary")} value={monthlyDisplay} icon={Sparkles} colors={colors} />
             <MiniStat label={t("togetherLabel")} value={`${togetherDays.toLocaleString()} ${t("daysWord")}`} icon={Heart} colors={colors} />
           </View>
-        </View>
-        <HeartsWishesCards />
-        <TogetherCards />
+          <Pressable accessibilityRole="button" onPress={() => router.push('/(tabs)/us')} style={{ paddingVertical: 14, minHeight: 48 }}>
+            <Text style={{ color: colors.primaryDeep, fontWeight: '700' }}>{copy.plan} →</Text>
+          </Pressable>
+        </View>}
         <CryptoTransferCard />
       </ScrollView>
 
@@ -264,7 +223,7 @@ export default function HomeScreen() {
       {sentEmoji && (
         <Animated.View pointerEvents="none" style={[styles.overlay, { opacity: fadeAnim, backgroundColor: colors.primary + "ee" }]}>
           <Text style={{ fontSize: 72 }}>{sentEmoji}</Text>
-          <Text style={{ color: "#fff", fontWeight: "700", fontSize: 16, marginTop: 14 }}>{t("sentEmojiMsg", { emoji: sentEmoji })}</Text>
+          <Text style={{ color: "#fff", fontWeight: "700", fontSize: 16, marginTop: 14 }}>{copy.local}</Text>
         </Animated.View>
       )}
 
@@ -381,7 +340,7 @@ function MiniStat({ label, value, icon: Icon, colors }: any) {
 
 function makeStyles(colors: any) {
   return StyleSheet.create({
-    body: { padding: 16, paddingTop: Platform.OS === "ios" ? 60 : 32, paddingBottom: 40, gap: 12 },
+    body: { paddingHorizontal: 20, paddingTop: 8, paddingBottom: 40, gap: 18 },
     topBar: { flexDirection: "row", alignItems: "center", justifyContent: "space-between" },
     avatar: { width: 40, height: 40, borderRadius: 20, alignItems: "center", justifyContent: "center" },
     avatarText: { color: "#fff", fontWeight: "700", fontSize: 15 },
@@ -389,7 +348,7 @@ function makeStyles(colors: any) {
     subtle: { fontSize: 11 },
     onlineDot: { width: 6, height: 6, borderRadius: 3, backgroundColor: "#4CD48A" },
     iconBtn: { width: 36, height: 36, borderRadius: 12, alignItems: "center", justifyContent: "center" },
-    card: { backgroundColor: colors.cardBg, borderRadius: 20, padding: 16, borderWidth: 1, borderColor: colors.cardBorder },
+    card: { backgroundColor: colors.cardBg, borderRadius: 28, padding: 22, borderWidth: 1, borderColor: colors.cardBorder, shadowColor: colors.ink, shadowOpacity: 0.035, shadowRadius: 18, shadowOffset: { width: 0, height: 5 }, elevation: 1 },
     tzDivider: { width: 1, flex: 1 },
     tzTag: { paddingHorizontal: 10, paddingVertical: 4, borderRadius: 100, marginVertical: 6 },
     distanceRow: { flexDirection: "row", alignItems: "center", marginTop: 12, paddingTop: 10, borderTopWidth: 1 },

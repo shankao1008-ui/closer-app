@@ -32,18 +32,18 @@ function mk(...vals: string[]) {
 
 export const THEMES = {
   feminine: {
-    primary: "#FF8A65", primaryDeep: "#E67A55", lavender: "#CE93D8", lavenderDeep: "#B565C7", coral: "#FF6B6B",
-    ink: "#3A2E39", inkSoft: "#7A6B76",
+    primary: "#C15F73", primaryDeep: "#984359", lavender: "#CE93D8", lavenderDeep: "#B565C7", coral: "#FF6B6B",
+    ink: "#382C38", inkSoft: "#756774",
     cardBg: "rgba(255,255,255,0.75)", cardBorder: "rgba(255,255,255,0.9)",
-    screenBg: ["#FFF3EA", "#FBEFF7", "#F6E9FA"] as const,
+    screenBg: ["#FFF8F0", "#FAF0EB", "#F4EAF2"] as const,
     navBg: "rgba(255,255,255,0.92)", hairline: "rgba(0,0,0,0.08)",
     chipBg: "rgba(255,255,255,0.6)", inputBg: "rgba(255,255,255,0.85)", bubblePartnerBg: "#FFFFFF",
   },
   masculine: {
-    primary: "#3B82D6", primaryDeep: "#2E6BB0", lavender: "#5A9BD5", lavenderDeep: "#1A365D", coral: "#FF6B6B",
+    primary: "#427B90", primaryDeep: "#2E5B70", lavender: "#5A9BD5", lavenderDeep: "#1A365D", coral: "#FF6B6B",
     ink: "#1A365D", inkSoft: "#5A7A9A",
-    cardBg: "#F5F8FC", cardBorder: "#D6E4F0",
-    screenBg: ["#F5F8FC", "#EDF3FA", "#E8EEF6"] as const,
+    cardBg: "#FFFFFF", cardBorder: "#E1E8E6",
+    screenBg: ["#F6F8F3", "#EBF2EE", "#E9EEF5"] as const,
     navBg: "rgba(245,248,252,0.95)", hairline: "rgba(26,54,93,0.10)",
     chipBg: "rgba(26,54,93,0.05)", inputBg: "rgba(26,54,93,0.06)", bubblePartnerBg: "#E8F0FE",
   },
