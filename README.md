@@ -51,7 +51,8 @@ Open Cake Wallet from Home, with Bitcoin and Monero as the initial focus. The sh
 I've been working on both the product design and the details needed to make it usable:
 
 - Moving from the earlier Firebase approach to Supabase.
-- Adding Email Magic Link sign-in, profile setup and partner pairing.
+- Replacing Email Magic Link with a persistent device identity: no registration form or verification email.
+- Keeping partner pairing and optional name, birthday and photo editing.
 - Working through login callbacks, loading loops and profile-saving permissions.
 - Connecting messaging and photo-sharing flows to the backend.
 - Improving how names and avatars map to each partner.
@@ -67,7 +68,7 @@ The features above describe the current source. Full two-device testing is still
 
 Next priorities:
 
-- [ ] Finish testing sign-in, pairing, messaging and photo delivery between two accounts.
+- [ ] Finish testing device sessions, pairing, messaging and photo delivery between two devices.
 - [ ] Connect real voice and video calls. The current call screen is a preview only.
 - [ ] Build a native home-screen photo widget. Photos currently appear inside Closer.
 - [ ] Add reliable background notifications.
@@ -95,15 +96,16 @@ npx expo start --go --lan
 
 If the tunnel fails, resolve that error before sharing the QR code. The GitHub link contains the source; it is not a hosted version of the app.
 
-### Sign in and pair
+### Open and pair — no email required
 
-1. Open Closer using the current QR code.
-2. Find `[Closer] Supabase Redirect URL:` in the terminal. The Supabase project owner needs to add that exact URL to **Authentication → URL Configuration → Redirect URLs**.
-3. Request a fresh sign-in email and open the link on the phone running Closer.
-4. Complete your profile if prompted. Returning users with completed profiles can go straight into the app.
-5. Use separate email accounts: one person creates a pairing code and the other joins with it.
+1. The project owner enables **Anonymous Sign-ins** in Supabase Authentication before first use (see [setup](SUPABASE_SETUP.md)).
+2. Scan the current running terminal's QR code. Closer creates or restores a private device session and opens Home automatically.
+3. Tap the pairing button: one partner creates a code; the other enters it on their own device.
+4. Add your name and photo in **Settings → Edit name and profile photo** whenever you want. Birthday and photo are optional.
 
-A new server address may require a new allowed redirect URL. Don't share your personal email sign-in link with your partner.
+There is no email registration screen, verification code, or email callback to configure for this flow. Existing signed-in sessions are preserved. The session is saved locally; clearing Expo Go/app data or changing phones will not recover a guest's previous identity or pairing. A pairing code links two identities — it does not recover an old one.
+
+A working backend and network are still required. Removing the email step does not fix an unavailable Supabase project or an unreachable Metro server. New screenshots will be added after device testing.
 
 ### Backend setup
 

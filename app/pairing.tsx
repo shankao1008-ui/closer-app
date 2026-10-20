@@ -2,7 +2,7 @@ import * as Clipboard from "expo-clipboard";
 import { LinearGradient } from "expo-linear-gradient";
 import { useRouter } from "expo-router";
 import { ArrowLeft, Copy, Heart } from "lucide-react-native";
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import {
     ActivityIndicator, Alert, Platform, Pressable, StyleSheet, Text, TextInput, View,
 } from "react-native";
@@ -10,7 +10,7 @@ import { useApp } from "../context/AppContext";
 import { createPairingCode, redeemPairingCode } from "../lib/pairing";
 
 export default function PairingScreen() {
-  const { colors, coupleId, lang } = useApp();
+  const { colors, coupleId, lang, refreshPairing } = useApp();
   const en = lang === "en";
   const router = useRouter();
   const styles = makeStyles(colors);
@@ -18,6 +18,13 @@ export default function PairingScreen() {
   const [myCode, setMyCode] = useState<string | null>(null);
   const [inputCode, setInputCode] = useState("");
   const [loading, setLoading] = useState(false);
+
+  // Refresh the creator too, even when Realtime publication is unavailable.
+  useEffect(() => {
+    if (coupleId || mode !== "create") return;
+    const timer = setInterval(() => { void refreshPairing().catch(() => {}); }, 5000);
+    return () => clearInterval(timer);
+  }, [coupleId, mode, refreshPairing]);
 
   // 已經配對成功了，直接返回主畫面
   if (coupleId) {
@@ -50,6 +57,7 @@ export default function PairingScreen() {
     setLoading(true);
     try {
       await redeemPairingCode(inputCode.trim());
+      await refreshPairing();
       Alert.alert(en ? "Paired successfully!" : "配對成功！", en ? "You’re now connected 💕" : "你們已經連上囉 💕");
     } catch (e: any) {
       Alert.alert(en ? "Pairing failed" : "配對失敗", e.message ?? (en ? "Please check the pairing code" : "請確認配對碼是否正確"));

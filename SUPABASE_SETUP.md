@@ -1,12 +1,25 @@
-# Supabase configuration for this snapshot
+# Supabase setup — no-email device sessions
 
-This version uses Email Magic Link authentication, not anonymous sign-in. `lib/supabase.ts` currently connects to the owner's existing backend. Partners testing together should use that same backend and separate email accounts.
+## Required owner setting
 
-## Existing project: login redirect
+Open the existing project in Supabase Dashboard → **Authentication → Sign In / Providers** and enable **Anonymous Sign-ins**. Depending on the dashboard version this may be under Authentication configuration. Save the setting before testing a fresh device. This repository cannot toggle that hosted setting by itself.
 
-Open the app through the current Expo Go QR code. Copy the URL printed after `[Closer] Supabase Redirect URL:` in Metro into **Authentication → URL Configuration → Redirect URLs** and save. Request a new email after this change. If your server address changes, update the allowlist for the new address. Open the email on the phone running the app.
+The app uses `signInAnonymously()` only when no saved session exists. Existing guest and email sessions remain intact. Anonymous users still have individual UUIDs and the `authenticated` database role. Do not disable RLS or grant public access to make pairing work.
 
-Client code supplies `emailRedirectTo`. The configured email template must preserve the Supabase verification flow and its redirect. See [Supabase redirect documentation](https://supabase.com/docs/guides/auth/redirect-urls).
+Run `supabase-device-access.sql` in the SQL Editor if own-profile insert/update policies are missing. It adds only policies scoped to `auth.uid() = id`; it does not delete users, couples or photos. Any existing restrictive policies that explicitly reject anonymous users must be reviewed separately.
+
+No email template, SMTP, or callback allowlist is needed for the new entry flow. Legacy email callback routes no longer consume tokens or change identities.
+
+## Two-device acceptance check
+
+- Fresh device opens Home without email; reloading keeps the same identity.
+- An existing signed-in device keeps its profile and pairing.
+- Device A creates a code; B joins. Both show paired within a few seconds.
+- Save a name and optionally birthday/photo, restart, and confirm the values persist.
+- Exchange a chat message and photo, then unpair and confirm both lose shared access.
+- Network failure shows a retry action. Retry must reuse any session already created.
+
+Automated session tests do not replace this live-backend/device check. Clearing app storage loses guest access; the pairing code is not an account recovery secret.
 
 ## Database coverage
 

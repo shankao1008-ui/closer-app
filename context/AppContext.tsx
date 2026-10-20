@@ -1,3 +1,4 @@
+import { ensureDeviceSession } from "../lib/deviceSession";
 import React, { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from "react";
 import { City, getCityByTz } from "../lib/cities";
 import { DEFAULT_MONTHLY_DAYS, DEFAULT_REL, Relationship } from "../lib/data";
@@ -187,7 +188,7 @@ type AppCtxValue = {
   partnerUid: string | null;
   unpair: () => Promise<void>;
   refreshPairing: () => Promise<void>;
-  completeProfile: (profile: { name: string; birthDate: string; avatarUri: string }) => Promise<void>;
+  completeProfile: (profile: { name: string; birthDate: string | null; avatarUri: string | null }) => Promise<void>;
   signOut: () => Promise<void>;
 };
 
@@ -350,7 +351,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     let eventReceived = false;
     const publish = (next: Session | null) => {
       if (!active) return;
-      const accepted = next?.user.is_anonymous ? null : next;
+      const accepted = next;
       const nextUid = accepted?.user.id ?? null;
       if (currentUidRef.current !== nextUid) {
         setProfileOwner(null);
@@ -370,27 +371,34 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       if (active && !eventReceived) setAccountError(true);
     }, 15_000);
     const { data: listener } = supabase.auth.onAuthStateChange((_event, next) => {
-      eventReceived = true;
-      clearTimeout(timer);
-      publish(next);
-    });
-    supabase.auth.getSession().then(({ data, error }) => {
-      if (!active || eventReceived) return;
-      clearTimeout(timer);
-      if (error) { setAccountError(true); return; }
-      publish(data.session);
-    }).catch(() => {
-      if (active && !eventReceived) {
+      if (next) {
+        eventReceived = true;
         clearTimeout(timer);
+        publish(next);
+      } else if (_event === "SIGNED_OUT") {
+        publish(null);
+        setAccountError(true);
+      }
+    });
+    // INITIAL_SESSION can be null. Do not treat it as a completed guest login.
+    ensureDeviceSession().then((restored) => {
+      if (!active) return;
+      clearTimeout(timer);
+      setAccountError(false);
+      publish(restored);
+    }).catch((error) => {
+      if (active) {
+        clearTimeout(timer);
+        console.warn("Device session unavailable", error?.code ?? error?.name ?? "unknown");
         setAccountError(true);
       }
     });
     return () => { active = false; clearTimeout(timer); listener.subscription.unsubscribe(); };
   }, [loadAttempt]);
 
-  // Never treat an unread or failed profile request as an incomplete profile.
+  // Load local preferences first so they cannot overwrite the remote profile.
   useEffect(() => {
-    if (!uid) return;
+    if (!uid || !isLoaded) return;
     let active = true;
     let expired = false;
     const isCurrent = () => active && !expired && currentUidRef.current === uid;
@@ -408,10 +416,18 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         .eq("id", uid).maybeSingle();
       if (!isCurrent()) return;
       if (error) throw error;
+      if (!data) {
+        const { error: createError } = await supabase.from("profiles").upsert(
+          { id: uid, display_name: "", onboarding_completed: false },
+          { onConflict: "id", ignoreDuplicates: true },
+        );
+        if (!isCurrent()) return;
+        if (createError) throw createError;
+      }
       clearTimeout(timer);
       setProfileComplete(Boolean(data?.onboarding_completed));
       setMyBirthDate(data?.birth_date ?? null);
-      if (data?.display_name) setMyName(data.display_name);
+      setMyName(data?.display_name ?? "");
       const city = normalizeCity(data?.city_data);
       if (city) setMyCity(city);
       setProfileOwner(uid);
@@ -424,7 +440,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       if (isCurrent()) { clearTimeout(timer); setAccountError(true); }
     });
     return () => { active = false; clearTimeout(timer); };
-  }, [uid, loadAttempt]);
+  }, [uid, loadAttempt, isLoaded]);
 
   useEffect(() => {
     if (uid) void refreshCouple(uid).catch(() => {
@@ -446,7 +462,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
 
   // 同步自己的公開資料。
   useEffect(() => {
-    if (!uid || !isLoaded || !profileComplete) return;
+    if (!uid || !isLoaded || profileOwner !== uid) return;
     const timer = setTimeout(() => {
       supabase.from("profiles").update({
         display_name: myName,
@@ -456,7 +472,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       }).eq("id", uid).then(({ error }) => { if (error) console.warn(error.message); });
     }, 350);
     return () => clearTimeout(timer);
-  }, [uid, isLoaded, profileComplete, myName, myCity]);
+  }, [uid, isLoaded, profileOwner, myName, myCity]);
 
   // 載入並監聽伴侶資料。
   useEffect(() => {
@@ -526,14 +542,14 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     setPartnerAvatarUri(null);
   }, [uid, coupleId]);
 
-  const completeProfile = useCallback(async ({ name, birthDate, avatarUri }: { name: string; birthDate: string; avatarUri: string }) => {
+  const completeProfile = useCallback(async ({ name, birthDate, avatarUri }: { name: string; birthDate: string | null; avatarUri: string | null }) => {
     if (!uid) throw new Error("Please sign in again.");
-    const avatarPath = await uploadAvatar(uid, avatarUri);
+    const avatarPath = avatarUri && !/^https?:\/\//.test(avatarUri) ? await uploadAvatar(uid, avatarUri) : undefined;
     const { error } = await supabase.from("profiles").upsert({
       id: uid,
       display_name: name.trim(),
       birth_date: birthDate,
-      avatar_url: avatarPath,
+      ...(avatarPath ? { avatar_url: avatarPath } : {}),
       city: myCity.name,
       city_data: myCity,
       onboarding_completed: true,

@@ -27,7 +27,7 @@ function Screen(){
   }}
   finally{lock.current=false;if(alive.current)setBusy(false);}
  };
- const add=()=>{if(!title.trim()){Alert.alert(c.wishes,c.invalid);return;}
+ const add=()=>{if(!uid || !coupleId) return; if(!title.trim()){Alert.alert(c.wishes,c.invalid);return;}
   const value=title.trim(),kind=category;
   void action(async()=>{const id=await hwRpc('closer_add_wish',{c:coupleId,t:value,k:kind});if(alive.current){setTitle('');setFilter('all');setSaved(true);setData(old=>old.some(w=>w.id===id)?old:[{id,creator:uid,title:value,category:kind,done:false,created_at:new Date().toISOString()},...old]);}});
  };

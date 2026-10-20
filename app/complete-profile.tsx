@@ -1,17 +1,19 @@
 import DateTimePicker, { DateTimePickerEvent } from "@react-native-community/datetimepicker";
 import * as ImagePicker from "expo-image-picker";
 import { LinearGradient } from "expo-linear-gradient";
+import { useRouter } from "expo-router";
 import { Camera, UserRound } from "lucide-react-native";
 import React, { useState } from "react";
 import { ActivityIndicator, Alert, Image, Platform, Pressable, StyleSheet, Text, TextInput, View } from "react-native";
 import { useApp } from "../context/AppContext";
 
 export default function CompleteProfileScreen() {
-  const { colors, lang, completeProfile, signOut } = useApp();
-  const en = lang === "en";
-  const [name, setName] = useState("");
-  const [birthDate, setBirthDate] = useState<Date | null>(null);
-  const [avatarUri, setAvatarUri] = useState<string | null>(null);
+  const { colors, lang, completeProfile, myName, myBirthDate, myAvatarUri } = useApp();
+  const en = !lang.startsWith("zh");
+  const router = useRouter();
+  const [name, setName] = useState(myName);
+  const [birthDate, setBirthDate] = useState<Date | null>(myBirthDate ? new Date(myBirthDate + "T12:00:00") : null);
+  const [avatarUri, setAvatarUri] = useState<string | null>(myAvatarUri);
   const [showDate, setShowDate] = useState(false);
   const [saving, setSaving] = useState(false);
 
@@ -26,15 +28,16 @@ export default function CompleteProfileScreen() {
     if (date) setBirthDate(date);
   };
   const submit = async () => {
-    if (!name.trim() || !birthDate || !avatarUri) {
-      Alert.alert(en ? "Complete every field" : "請完成所有資料", en ? "Name, birthday and profile photo are required." : "姓名、生日與大頭照皆為必填。" );
+    if (!name.trim()) {
+      Alert.alert(en ? "Add your name" : "請填寫名字", en ? "Birthday and photo are optional." : "生日和照片可稍後新增。" );
       return;
     }
     setShowDate(false);
     setSaving(true);
     try {
-      const isoDate = `${birthDate.getFullYear()}-${String(birthDate.getMonth() + 1).padStart(2, "0")}-${String(birthDate.getDate()).padStart(2, "0")}`;
+      const isoDate = birthDate ? `${birthDate.getFullYear()}-${String(birthDate.getMonth() + 1).padStart(2, "0")}-${String(birthDate.getDate()).padStart(2, "0")}` : null;
       await completeProfile({ name, birthDate: isoDate, avatarUri });
+      router.replace("/(tabs)");
     } catch (error: any) {
       Alert.alert(en ? "Unable to save profile" : "無法儲存個人資料", error?.message ?? (en ? "Please try again." : "請稍後再試。"));
     } finally { setSaving(false); }
@@ -43,7 +46,7 @@ export default function CompleteProfileScreen() {
   return (
     <LinearGradient colors={colors.screenBg as any} style={styles.root}>
       <View style={[styles.card, { backgroundColor: colors.cardBg, borderColor: colors.cardBorder }]}>
-        <Text style={[styles.title, { color: colors.ink }]}>{en ? "Create your profile" : "建立你的個人資料"}</Text>
+        <Text style={[styles.title, { color: colors.ink }]}>{en ? "Edit your profile" : "編輯個人資料"}</Text>
         <Text style={[styles.subtitle, { color: colors.inkSoft }]}>{en ? "Tell your partner a little about you." : "讓伴侶更認識你。"}</Text>
         <Pressable onPress={choosePhoto} style={[styles.avatar, { backgroundColor: colors.chipBg, borderColor: colors.primary }]}>
           {avatarUri ? <Image source={{ uri: avatarUri }} style={styles.avatarImage} /> : <><Camera size={26} color={colors.primaryDeep} /><Text style={{ color: colors.primaryDeep, fontSize: 11, marginTop: 6 }}>{en ? "Add photo" : "選擇照片"}</Text></>}
@@ -52,8 +55,8 @@ export default function CompleteProfileScreen() {
         <Pressable onPress={() => setShowDate(true)} style={[styles.dateButton, { backgroundColor: colors.inputBg }]}><Text style={{ color: birthDate ? colors.ink : colors.inkSoft }}>{birthDate ? birthDate.toLocaleDateString() : (en ? "Select your birthday" : "選擇出生日期")}</Text></Pressable>
         {showDate && <DateTimePicker value={birthDate ?? new Date(2000, 0, 1)} mode="date" maximumDate={new Date()} display={Platform.OS === "ios" ? "spinner" : "default"} onChange={changeDate} />}
         {Platform.OS === "ios" && showDate && <Pressable onPress={() => setShowDate(false)}><Text style={{ color: colors.primaryDeep, textAlign: "right", fontWeight: "700", marginTop: 6 }}>{en ? "Done" : "完成"}</Text></Pressable>}
-        <Pressable disabled={saving} onPress={submit} style={[styles.button, { backgroundColor: colors.primary, opacity: saving ? 0.65 : 1 }]}>{saving ? <ActivityIndicator color="#fff" /> : <Text style={styles.buttonText}>{en ? "Complete Profile" : "完成個人資料"}</Text>}</Pressable>
-        <Pressable disabled={saving} onPress={signOut}><Text style={[styles.signOut, { color: colors.inkSoft }]}>{en ? "Use another email" : "使用其他 Email"}</Text></Pressable>
+        <Pressable disabled={saving} onPress={submit} style={[styles.button, { backgroundColor: colors.primary, opacity: saving ? 0.65 : 1 }]}>{saving ? <ActivityIndicator color="#fff" /> : <Text style={styles.buttonText}>{en ? "Save profile" : "儲存個人資料"}</Text>}</Pressable>
+        <Pressable disabled={saving} onPress={() => router.replace("/(tabs)")}><Text style={[styles.signOut, { color: colors.inkSoft }]}>{en ? "Back to Home" : "回到首頁"}</Text></Pressable>
       </View>
     </LinearGradient>
   );

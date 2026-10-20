@@ -34,6 +34,11 @@ export default function SettingsScreen() {
           </Text>
         </Pressable>
 
+        <Pressable onPress={() => router.push("/complete-profile")} style={[styles.card, { backgroundColor: colors.cardBg, borderColor: colors.cardBorder }]}>
+          <Text style={{ color: colors.ink, fontWeight: "700" }}>{lang.startsWith("zh") ? "編輯名字與大頭照" : "Edit name and profile photo"}</Text>
+          <Text style={{ color: colors.inkSoft, marginTop: 8 }}>{lang.startsWith("zh") ? "此裝置會保留你的身分。清除 App 資料或換手機後，無法自動找回配對。" : "Your identity stays on this device. Clearing app data or changing phones does not restore your pairing automatically."}</Text>
+        </Pressable>
+
         <View style={[styles.card, { backgroundColor: colors.cardBg, borderColor: colors.cardBorder }]}>
           <Text style={[styles.eyebrow, { color: colors.inkSoft }]}>{t("editProfile")}</Text>
           <View style={{ flexDirection: "row", gap: 8, marginTop: 10 }}>

@@ -1,87 +1,44 @@
-import * as Linking from "expo-linking";
 import { Stack, useRootNavigationState, useRouter, useSegments } from "expo-router";
-import { useEffect, useState } from "react";
+import { useEffect } from "react";
 import { ActivityIndicator, Pressable, StyleSheet, Text, View } from "react-native";
 import { AppProvider, useApp } from "../context/AppContext";
-import { createSessionFromUrl, isAuthCallbackUrl } from "../lib/auth";
 
 function AppNavigator() {
-  const { authReady, accountReady, accountError, retryAccountLoad, session, profileComplete, colors, lang } = useApp();
-  const segments = useSegments();
+  const { authReady, accountReady, accountError, retryAccountLoad, session, colors, lang } = useApp();
   const router = useRouter();
   const navigation = useRootNavigationState();
-  const url = Linking.useURL();
-  const [linkState, setLinkState] = useState<{ url: string; failed: boolean } | null>(null);
-  const callbackUrl = url && isAuthCallbackUrl(url) ? url : null;
-  const linkPending = !!callbackUrl && linkState?.url !== callbackUrl;
-  const linkFailed = !!callbackUrl && linkState?.url === callbackUrl && linkState.failed;
+  const segments = useSegments();
   const first = segments[0] as string | undefined;
-  const onAuthRoute = first === "welcome" || first === "auth";
-  const onProfileRoute = first === "complete-profile";
-  const en = lang === "en";
-
+  const zh = lang.startsWith("zh");
+  const ready = authReady && accountReady && !!session && !accountError;
   useEffect(() => {
-    if (!callbackUrl) return;
-    let active = true;
-    void createSessionFromUrl(callbackUrl).then(() => {
-      if (active) setLinkState({ url: callbackUrl, failed: false });
-    }).catch(() => {
-      if (active) setLinkState({ url: callbackUrl, failed: true });
-    });
-    return () => { active = false; };
-  }, [callbackUrl]);
-
-  // This is the only owner of automatic authentication navigation.
-  useEffect(() => {
-    if (!navigation?.key || linkPending || linkFailed || !authReady || accountError) return;
-    if (!session) {
-      if (!onAuthRoute) router.replace("/welcome");
-      return;
+    if (navigation?.key && ready && (!first || first === "welcome" || first === "auth")) {
+      router.replace("/(tabs)");
     }
-    if (!accountReady) return;
-    if (!profileComplete && !onProfileRoute) router.replace("/complete-profile");
-    else if (profileComplete && (onAuthRoute || onProfileRoute || !first)) router.replace("/(tabs)");
-  }, [navigation?.key, linkPending, linkFailed, authReady, accountReady, accountError,
-    session, profileComplete, onAuthRoute, onProfileRoute, first, router]);
-
-  const blocked = linkPending || linkFailed || !authReady || accountError || (!!session && !accountReady);
-  const failed = linkFailed || accountError;
-  return (
-    <View style={{ flex: 1 }}>
-      {/* Mount the navigator before any navigation or deep-link processing. */}
-      <Stack screenOptions={{ headerShown: false }}>
-        <Stack.Screen name="welcome" />
-        <Stack.Screen name="auth/callback" />
-        <Stack.Screen name="complete-profile" />
-        <Stack.Screen name="(tabs)" />
-        <Stack.Screen name="settings" options={{ presentation: "modal" }} />
-        <Stack.Screen name="pairing" options={{ presentation: "modal" }} />
-      </Stack>
-      {blocked && (
-        <View accessibilityViewIsModal style={[StyleSheet.absoluteFill, styles.gate, { backgroundColor: colors.screenBg[2] }]}>
-          {!failed && <ActivityIndicator color={colors.primary} />}
-          <Text style={[styles.message, { color: colors.ink }]}>
-            {failed
-              ? linkFailed
-                ? (en ? "This sign-in link could not be completed. Request a new link." : "無法完成此登入連結，請重新寄送登入信。")
-                : (en ? "Your account data could not be loaded. Check your connection and try again." : "無法載入帳號資料，請檢查網路後重試。")
-              : (en ? "Loading your account…" : "正在載入帳號…")}
-          </Text>
-          {failed && <Pressable accessibilityRole="button" style={[styles.button, { backgroundColor: colors.primary }]} onPress={() => {
-            if (linkFailed && callbackUrl) {
-              setLinkState({ url: callbackUrl, failed: false });
-              router.replace("/welcome");
-            } else retryAccountLoad();
-          }}><Text style={styles.buttonText}>{linkFailed ? (en ? "Continue" : "繼續") : (en ? "Try again" : "重試")}</Text></Pressable>}
-        </View>
-      )}
-    </View>
-  );
+  }, [navigation?.key, ready, first, router]);
+  return <View style={{ flex: 1 }}>
+    <Stack screenOptions={{ headerShown: false }}>
+      <Stack.Screen name="welcome" />
+      <Stack.Screen name="auth/callback" />
+      <Stack.Screen name="complete-profile" />
+      <Stack.Screen name="(tabs)" />
+      <Stack.Screen name="settings" options={{ presentation: "modal" }} />
+      <Stack.Screen name="pairing" options={{ presentation: "modal" }} />
+    </Stack>
+    {!ready && <View accessibilityViewIsModal style={[StyleSheet.absoluteFill, styles.gate, { backgroundColor: colors.screenBg[2] }]}>
+      {!accountError && <ActivityIndicator color={colors.primary} />}
+      <Text style={[styles.message, { color: colors.ink }]}>{accountError
+        ? (zh ? "無法連線至 Closer，請檢查網路後重試。" : "Could not connect to Closer. Check your connection and try again.")
+        : (zh ? "正在開啟 Closer…" : "Opening Closer…")}</Text>
+      {accountError && <>
+        <Pressable accessibilityRole="button" onPress={retryAccountLoad} style={[styles.button, { backgroundColor: colors.primary }]}>
+          <Text style={styles.buttonText}>{zh ? "重試" : "Try again"}</Text>
+        </Pressable>
+      </>}
+    </View>}
+  </View>;
 }
-
-export default function RootLayout() {
-  return <AppProvider><AppNavigator /></AppProvider>;
-}
+export default function RootLayout() { return <AppProvider><AppNavigator /></AppProvider>; }
 const styles = StyleSheet.create({
   gate: { alignItems: "center", justifyContent: "center", padding: 28 },
   message: { fontSize: 16, lineHeight: 24, textAlign: "center", marginTop: 12 },

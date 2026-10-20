@@ -42,7 +42,7 @@ const WEATHER_KEY = (code: number) => {
 
 export default function HomeScreen() {
   const { 
-    colors, t, lang, 
+    colors, t, lang, coupleId,
     myName, myCity, myAvatarUri, setMyAvatarUri,
     partnerName, setPartnerName, partner, partnerAvatarUri, setPartnerAvatarUri, 
     monthlyDays, habibiEmojis, setHabibiEmojis,
@@ -128,6 +128,11 @@ export default function HomeScreen() {
     <View style={{ flex: 1 }}>
       <LinearGradient colors={colors.screenBg as any} style={StyleSheet.absoluteFill} />
       <ScrollView contentContainerStyle={styles.body} showsVerticalScrollIndicator={false}>
+        {!coupleId && <Pressable accessibilityRole="button" onPress={() => router.push("/pairing")}
+          style={{ backgroundColor: colors.primary, borderRadius: 24, padding: 18, marginBottom: 16, alignItems: "center" }}>
+          <Text style={{ color: "white", fontSize: 16, fontWeight: "700" }}>{lang.startsWith("zh") ? "與伴侶配對" : "Pair with your partner"}</Text>
+          <Text style={{ color: "white", marginTop: 6 }}>{lang.startsWith("zh") ? "產生配對碼，或輸入對方的配對碼" : "Create a pairing code or enter your partner’s code"}</Text>
+        </Pressable>}
         {/* top bar - 顯示伴侶（小明） */}
         <View style={styles.topBar}>
           <View style={{ flexDirection: "row", alignItems: "center", gap: 10 }}>
