@@ -1,6 +1,6 @@
 import * as ImagePicker from "expo-image-picker";
 import { LinearGradient } from "expo-linear-gradient";
-import { Camera, Image as ImageIcon, Images, Send, Type } from "lucide-react-native";
+import { Camera, Image as ImageIcon, Images, Send, Type, Heart, Sparkles, ChevronDown, ChevronUp, Check } from "lucide-react-native";
 import React, { useRef, useState } from "react";
 import {
   Animated,
@@ -21,6 +21,9 @@ import { useApp } from "../../context/AppContext";
 import { photoText, photoCaption, photoError } from "../../lib/photoText";
 import { sendPartnerWidgetPhoto } from "../../lib/widgetSync";
 
+import { useSafeAreaInsets } from "react-native-safe-area-context";
+import PhotoGlow from "../../components/PhotoGlow";
+import { photoDesignText } from "../../lib/photoDesignText";
 import ReceivedPhoto from "../../components/ReceivedPhoto";
 import { receivedPhotoText } from "../../lib/receivedPhotoText";
 
@@ -35,6 +38,9 @@ const SIZES = [
 export default function PhotoScreen() {
   const { colors, t, lang, gender, uid, coupleId } = useApp();
   const copy = photoText(lang);
+  const design = photoDesignText(lang);
+  const insets = useSafeAreaInsets();
+  const [showStyle, setShowStyle] = useState(false);
   const inboxCopy = receivedPhotoText(lang);
   const styles = makeStyles(colors);
   const canvasGradient = gender === "masculine"
@@ -71,6 +77,7 @@ export default function PhotoScreen() {
   const canvasSize = useRef({ width: 0, height: 0 });
   const pos = useRef(new Animated.ValueXY({ x: 0, y: 0 })).current;
   const [textLayout, setTextLayout] = useState({ width: 0, height: 0 });
+  const textSize = useRef({ width: 0, height: 0 });
 
   const panResponder = useRef(
     PanResponder.create({
@@ -91,10 +98,10 @@ export default function PhotoScreen() {
     const cw = canvasSize.current.width;
     const ch = canvasSize.current.height;
     const cur = { x: (pos.x as any)._value, y: (pos.y as any)._value };
-    const minX = -cw / 2 + textLayout.width / 2 + 8;
-    const maxX = cw / 2 - textLayout.width / 2 - 8;
-    const minY = -ch / 2 + textLayout.height / 2 + 8;
-    const maxY = ch / 2 - textLayout.height / 2 - 8;
+    const minX = -cw / 2 + textSize.current.width / 2 + 8;
+    const maxX = cw / 2 - textSize.current.width / 2 - 8;
+    const minY = -ch * 0.78 + textSize.current.height / 2 + 8;
+    const maxY = ch * 0.22 - textSize.current.height / 2 - 8;
     const nx = Math.max(minX, Math.min(maxX, cur.x));
     const ny = Math.max(minY, Math.min(maxY, cur.y));
     Animated.spring(pos, { toValue: { x: nx, y: ny }, useNativeDriver: false, friction: 6 }).start();
@@ -115,6 +122,7 @@ export default function PhotoScreen() {
       Alert.alert(copy.chooseTitle, copy.chooseBody);
       return;
     }
+    if (sending) return;
     setSending(true);
     try {
       await sendPartnerWidgetPhoto({ uri: photoUri, coupleId, senderId: uid, caption: text });
@@ -136,32 +144,40 @@ export default function PhotoScreen() {
   return (
     <View style={{ flex: 1 }}>
       <LinearGradient colors={colors.screenBg as any} style={StyleSheet.absoluteFill} />
-      <ScrollView contentContainerStyle={styles.body} showsVerticalScrollIndicator={false}>
-        <ReceivedPhoto />
-        <Text style={{ color: colors.ink, fontSize: 18, fontWeight: "700" }}>{inboxCopy.create}</Text>
+      <ScrollView contentContainerStyle={[styles.body, { paddingTop: insets.top + 18 }]} keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false}>
+        <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 12 }}>
+          <View style={{ flex: 1 }}><Text style={{ color: colors.ink, fontSize: 32, fontWeight: "800", letterSpacing: -1 }}>{t("tabPhoto")}<Text style={{ color: colors.primary }}>.</Text></Text>
+            <Text style={{ color: colors.inkSoft, fontSize: 14, lineHeight: 21, marginTop: 6 }}>{design.subtitle}</Text></View>
+          <View style={{ width: 48, height: 48, borderRadius: 24, backgroundColor: colors.cardBg, alignItems: "center", justifyContent: "center" }}><Heart size={22} color={colors.primary} fill={colors.primary + "20"} /></View>
+        </View>
+        <View style={styles.postcard}>
+        <View style={{ flexDirection: "row", gap: 8, alignItems: "center", padding: 8, paddingBottom: 16 }}><Sparkles size={17} color={colors.primaryDeep} /><Text style={{ color: colors.ink, fontSize: 15, fontWeight: "700", flex: 1 }}>{design.create}</Text></View>
         {/* photo canvas */}
         <View style={styles.canvasWrap} onLayout={onCanvasLayout}>
           {photoUri ? (
             <Image source={{ uri: photoUri }} style={StyleSheet.absoluteFill} resizeMode="cover" />
           ) : (
             <>
-              <LinearGradient colors={canvasGradient} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={StyleSheet.absoluteFill} />
-              <View style={styles.canvasIconWrap}>
-                <ImageIcon size={54} color="rgba(255,255,255,0.35)" />
-              </View>
+              <PhotoGlow cool={gender === "masculine"} />
+              <Pressable accessibilityRole="button" accessibilityLabel={copy.choosePhoto} disabled={sending} onPress={pickFromLibrary} style={styles.canvasIconWrap}>
+                <View style={styles.addIcon}><ImageIcon size={32} color="#694660" /><View style={styles.plus}><Text style={{ color: "#694660", fontSize: 20, fontWeight: "700" }}>+</Text></View></View>
+                <Text style={{ color: "#493447", fontSize: 17, fontWeight: "800", marginTop: 18 }}>{design.add}</Text>
+              </Pressable>
             </>
           )}
           <Animated.View
             {...panResponder.panHandlers}
-            onLayout={(e) => setTextLayout({ width: e.nativeEvent.layout.width, height: e.nativeEvent.layout.height })}
+            onLayout={(e) => { const measured = { width: e.nativeEvent.layout.width, height: e.nativeEvent.layout.height }; textSize.current = measured; setTextLayout(measured); }}
             style={[
               styles.dragText,
-              { transform: [{ translateX: pos.x }, { translateY: pos.y }] },
+              { marginLeft: -textLayout.width / 2, marginTop: -textLayout.height / 2, transform: [{ translateX: pos.x }, { translateY: pos.y }] },
             ]}
           >
             <Text
               style={{
                 color, fontSize: sizeInfo.fontSize,
+                fontFamily: font === "handwriting" ? Platform.select({ ios: "Noteworthy", android: "cursive" }) : font === "rounded" ? Platform.select({ ios: "Avenir Next", android: "sans-serif-medium" }) : undefined,
+                textAlign: "center",
                 fontWeight: font === "bold" ? "800" : "600",
                 textShadowColor: "rgba(0,0,0,0.25)", textShadowOffset: { width: 0, height: 2 }, textShadowRadius: 8,
               }}
@@ -174,13 +190,15 @@ export default function PhotoScreen() {
           </View>
         </View>
 
+        </View>
+
         {/* take photo / choose from library */}
         <View style={styles.photoActionRow}>
-          <Pressable onPress={takePhoto} style={[styles.photoActionBtn, { backgroundColor: colors.cardBg, borderColor: colors.cardBorder }]}>
+          <Pressable accessibilityRole="button" disabled={sending} onPress={takePhoto} style={[styles.photoActionBtn, { backgroundColor: colors.cardBg, borderColor: colors.cardBorder }]}>
             <Camera size={16} color={colors.primaryDeep} />
             <Text style={{ color: colors.ink, fontWeight: "700", fontSize: 12.5, marginLeft: 6, flexShrink: 1, textAlign: "center" }}>{copy.takePhoto}</Text>
           </Pressable>
-          <Pressable onPress={pickFromLibrary} style={[styles.photoActionBtn, { backgroundColor: colors.cardBg, borderColor: colors.cardBorder }]}>
+          <Pressable accessibilityRole="button" disabled={sending} onPress={pickFromLibrary} style={[styles.photoActionBtn, { backgroundColor: colors.cardBg, borderColor: colors.cardBorder }]}>
             <Images size={16} color={colors.primaryDeep} />
             <Text style={{ color: colors.ink, fontWeight: "700", fontSize: 12.5, marginLeft: 6, flexShrink: 1, textAlign: "center" }}>{copy.choosePhoto}</Text>
           </Pressable>
@@ -191,6 +209,8 @@ export default function PhotoScreen() {
           <View style={styles.textRow}>
             <Type size={15} color={colors.inkSoft} />
             <TextInput
+              accessibilityLabel={t("textPlaceholder")}
+              editable={!sending}
               value={text}
               onChangeText={(v) => setText(v.slice(0, 30))}
               placeholder={t("textPlaceholder")}
@@ -200,9 +220,14 @@ export default function PhotoScreen() {
             <Text style={{ fontSize: 10, color: colors.inkSoft }}>{text.length}/30</Text>
           </View>
 
+          <Pressable accessibilityRole="button" accessibilityState={{ expanded: showStyle }} onPress={() => setShowStyle(value => !value)} style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", minHeight: 44 }}>
+            <Text style={{ color: colors.ink, fontWeight: "700" }}>{design.style}</Text>{showStyle ? <ChevronUp size={18} color={colors.inkSoft} /> : <ChevronDown size={18} color={colors.inkSoft} />}
+          </Pressable>
+          {showStyle && <>
           <View style={styles.chipRow}>
             {FONTS.map((f) => (
               <Pressable
+                accessibilityRole="button" accessibilityState={{ selected: font === f }}
                 key={f}
                 onPress={() => setFont(f)}
                 style={[styles.fontChip, { backgroundColor: font === f ? colors.ink : colors.hairline }]}
@@ -215,6 +240,7 @@ export default function PhotoScreen() {
           <View style={styles.colorRow}>
             {TEXT_COLORS.map((c) => (
               <Pressable
+                accessibilityRole="button" accessibilityLabel={c} accessibilityState={{ selected: color === c }}
                 key={c}
                 onPress={() => setColor(c)}
                 style={[
@@ -228,6 +254,7 @@ export default function PhotoScreen() {
           <View style={styles.chipRow}>
             {SIZES.map((s) => (
               <Pressable
+                accessibilityRole="button" accessibilityState={{ selected: sizeKey === s.key }}
                 key={s.key}
                 onPress={() => setSizeKey(s.key)}
                 style={[styles.sizeChip, { backgroundColor: sizeKey === s.key ? colors.primary : colors.hairline }]}
@@ -236,14 +263,17 @@ export default function PhotoScreen() {
               </Pressable>
             ))}
           </View>
+          <Text style={{ color: colors.inkSoft, fontSize: 12, lineHeight: 18 }}>{design.preview}</Text>
+          </>}
         </View>
 
-        <Pressable onPress={handleSend} disabled={sending} style={[styles.sendBtnWrap, { opacity: sending ? 0.65 : 1 }]}>
+        <Pressable accessibilityRole="button" accessibilityState={{ disabled: sending, busy: sending }} onPress={handleSend} disabled={sending} style={[styles.sendBtnWrap, { opacity: sending ? 0.65 : 1 }]}>
           <LinearGradient colors={[colors.primary, colors.lavenderDeep]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }} style={styles.sendBtn}>
             {sending ? <ActivityIndicator color="#fff" size="small" /> : <Send size={16} color="#fff" />}
             <Text style={{ color: "#fff", fontWeight: "700", fontSize: 14, marginLeft: 8, flexShrink: 1, textAlign: "center" }}>{sending ? copy.sending : inboxCopy.send}</Text>
           </LinearGradient>
         </Pressable>
+        <ReceivedPhoto />
       </ScrollView>
 
       {sent && (
@@ -254,7 +284,7 @@ export default function PhotoScreen() {
             <LinearGradient colors={canvasGradient} style={styles.widgetPreview} />
           )}
           <Text style={{ color: "#fff", fontWeight: "700", fontSize: 15, marginTop: -34 }}>{text}</Text>
-          <Text style={{ color: "#fff", fontWeight: "700", fontSize: 15, marginTop: 16 }}>{inboxCopy.sent}</Text>
+          <View style={{ flexDirection: "row", alignItems: "center", gap: 8, marginTop: 20 }}><Check size={22} color="#fff" /><Text accessibilityRole="alert" style={{ color: "#fff", fontWeight: "700", fontSize: 17 }}>{inboxCopy.sent}</Text></View>
         </Animated.View>
       )}
     </View>
@@ -263,22 +293,25 @@ export default function PhotoScreen() {
 
 function makeStyles(colors: any) {
   return StyleSheet.create({
-    body: { flexGrow: 1, padding: 16, paddingTop: Platform.OS === "ios" ? 60 : 32, paddingBottom: 50, gap: 14 },
+    body: { flexGrow: 1, padding: 20, paddingBottom: 48, gap: 18 },
+    postcard: { backgroundColor: colors.cardBg, borderRadius: 32, padding: 10, shadowColor: "#77495E", shadowOpacity: 0.09, shadowRadius: 18, shadowOffset: { width: 0, height: 7 } },
+    addIcon: { width: 76, height: 76, borderRadius: 26, backgroundColor: "#FFF8F0D9", alignItems: "center", justifyContent: "center", transform: [{ rotate: "-7deg" }] },
+    plus: { position: "absolute", bottom: -5, right: -5, width: 28, height: 28, borderRadius: 14, backgroundColor: "#FFE1CB", alignItems: "center", justifyContent: "center", borderWidth: 2, borderColor: "#FFF8F0" },
     canvasWrap: { width: "100%", aspectRatio: 4 / 5, borderRadius: 22, overflow: "hidden" },
     canvasIconWrap: { ...StyleSheet.absoluteFill, alignItems: "center", justifyContent: "center" },
-    dragText: { position: "absolute", left: "50%", top: "78%" },
+    dragText: { position: "absolute", left: "50%", top: "78%", maxWidth: "85%" },
     dragHintTag: { position: "absolute", top: 10, right: 10, backgroundColor: "rgba(0,0,0,0.3)", paddingHorizontal: 10, paddingVertical: 3, borderRadius: 100 },
     photoActionRow: { flexDirection: "row", gap: 10 },
-    photoActionBtn: { flex: 1, flexDirection: "row", alignItems: "center", justifyContent: "center", paddingVertical: 12, borderRadius: 16, borderWidth: 1 },
-    card: { borderRadius: 20, padding: 16, borderWidth: 1, gap: 12 },
-    textRow: { flexDirection: "row", alignItems: "center" },
+    photoActionBtn: { flex: 1, flexDirection: "row", alignItems: "center", justifyContent: "center", minHeight: 54, paddingHorizontal: 12, paddingVertical: 14, borderRadius: 20, borderWidth: 1 },
+    card: { borderRadius: 26, padding: 16, borderWidth: 1, gap: 12 },
+    textRow: { flexDirection: "row", alignItems: "center", minHeight: 48, backgroundColor: colors.hairline, borderRadius: 16, paddingHorizontal: 12 },
     chipRow: { flexDirection: "row", flexWrap: "wrap", gap: 8 },
-    fontChip: { flexGrow: 1, flexBasis: "40%", alignItems: "center", paddingHorizontal: 4, paddingVertical: 6, borderRadius: 100 },
-    sizeChip: { flex: 1, alignItems: "center", paddingVertical: 8, borderRadius: 100 },
-    colorRow: { flexDirection: "row", gap: 10 },
-    colorDot: { width: 24, height: 24, borderRadius: 12 },
-    sendBtnWrap: { borderRadius: 18, overflow: "hidden" },
-    sendBtn: { flexDirection: "row", alignItems: "center", justifyContent: "center", paddingVertical: 14 },
+    fontChip: { flexGrow: 1, flexBasis: "40%", alignItems: "center", paddingHorizontal: 4, minHeight: 44, justifyContent: "center", paddingVertical: 10, borderRadius: 100 },
+    sizeChip: { flex: 1, alignItems: "center", minHeight: 44, justifyContent: "center", paddingVertical: 10, borderRadius: 100 },
+    colorRow: { flexDirection: "row", flexWrap: "wrap", gap: 10 },
+    colorDot: { width: 40, height: 40, borderRadius: 20 },
+    sendBtnWrap: { borderRadius: 22, overflow: "hidden" },
+    sendBtn: { flexDirection: "row", alignItems: "center", justifyContent: "center", minHeight: 58, paddingHorizontal: 16, paddingVertical: 18 },
     overlay: {
       position: "absolute", top: 0, left: 0, right: 0, bottom: 0, backgroundColor: "rgba(20,14,20,0.9)",
       alignItems: "center", justifyContent: "center",

@@ -1,5 +1,8 @@
 import React, { useCallback, useRef, useState } from "react";
 import { ActivityIndicator, AppState, Image, Pressable, Text, View } from "react-native";
+import { Heart, RefreshCw, Image as PhotoIcon } from "lucide-react-native";
+import { photoDesignText } from "../lib/photoDesignText";
+import { useRouter } from "expo-router";
 import { useFocusEffect } from "expo-router";
 import { useApp } from "../context/AppContext";
 import { supabase } from "../lib/supabase";
@@ -15,6 +18,8 @@ export default function ReceivedPhoto() {
 function PhotoInbox({ uid, coupleId }: { uid: string | null; coupleId: string | null }) {
   const { lang, colors } = useApp();
   const copy = receivedPhotoText(lang);
+  const design = photoDesignText(lang);
+  const router = useRouter();
   const [photo, setPhoto] = useState<Awaited<ReturnType<typeof getLatestPartnerWidgetPhoto>>>(null);
   const [busy, setBusy] = useState(!!uid && !!coupleId);
   const [failed, setFailed] = useState(false);
@@ -66,20 +71,21 @@ function PhotoInbox({ uid, coupleId }: { uid: string | null; coupleId: string | 
     };
   }, [uid, coupleId, retry]));
 
-  return <View style={{ padding: 16, borderRadius: 20, backgroundColor: colors.cardBg, gap: 12 }}>
-    <Text style={{ fontSize: 18, fontWeight: "700", color: colors.ink }}>{copy.title}</Text>
-    {!uid || !coupleId ? <Text style={{ color: colors.inkSoft }}>{copy.pair}</Text> : <>
+  return <View style={{ padding: 20, borderRadius: 28, backgroundColor: colors.cardBg, gap: 16, marginTop: 10 }}>
+    <View style={{ flexDirection: "row", alignItems: "center", gap: 10 }}><View style={{ backgroundColor: colors.hairline, padding: 10, borderRadius: 16 }}><Heart size={20} color={colors.primaryDeep} /></View><Text style={{ flex: 1, fontSize: 19, fontWeight: "800", color: colors.ink }}>{copy.title}</Text></View>
+    {!uid || !coupleId ? <View style={{ gap: 14, paddingVertical: 8 }}><Text style={{ color: colors.inkSoft, lineHeight: 22 }}>{copy.pair}</Text>
+      <Pressable accessibilityRole="button" onPress={() => router.push('/pairing')} style={{ backgroundColor: colors.hairline, borderRadius: 18, padding: 16, alignItems: "center" }}><Text style={{ color: colors.primaryDeep, fontWeight: "700" }}>{design.pair}</Text></Pressable></View> : <>
       {photo && <>
         <Image key={photo.url} source={{ uri: photo.url }} accessibilityLabel={copy.title}
           onError={() => { cached.current.at = 0; setImageFailed(true); }}
-          style={{ width: "100%", aspectRatio: 4 / 5, borderRadius: 16 }} resizeMode="contain" />
-        {!!photo.caption && <Text style={{ color: colors.ink, fontSize: 16 }}>{photo.caption}</Text>}
+          style={{ width: "100%", aspectRatio: 4 / 5, borderRadius: 20, backgroundColor: colors.hairline }} resizeMode="contain" />
+        {!!photo.caption && <Text style={{ color: colors.ink, fontSize: 17, lineHeight: 25, textAlign: "center" }}>{photo.caption}</Text>}
       </>}
       {(failed || imageFailed) && <Text accessibilityRole="alert" style={{ color: colors.ink }}>{copy.error}</Text>}
-      {!photo && !failed && <Text style={{ color: colors.inkSoft }}>{busy ? copy.loading : copy.empty}</Text>}
+      {!photo && !failed && <View style={{ alignItems: "center", justifyContent: "center", padding: 26, gap: 12, borderRadius: 22, backgroundColor: colors.hairline }}><PhotoIcon size={32} color={colors.primaryDeep} /><Text style={{ color: colors.inkSoft, textAlign: "center", lineHeight: 22 }}>{busy ? copy.loading : copy.empty}</Text></View>}
       <Pressable accessibilityRole="button" disabled={busy} onPress={() => { cached.current.at = 0; setRetry(n => n + 1); }}
         style={{ minHeight: 44, justifyContent: "center", alignItems: "center", borderRadius: 12, backgroundColor: colors.hairline }}>
-        {busy ? <ActivityIndicator accessibilityLabel={copy.loading} color={colors.primaryDeep} /> : <Text style={{ color: colors.ink }}>{copy.refresh}</Text>}
+        {busy ? <ActivityIndicator accessibilityLabel={copy.loading} color={colors.primaryDeep} /> : <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}><RefreshCw size={15} color={colors.ink} /><Text style={{ color: colors.ink }}>{copy.refresh}</Text></View>}
       </Pressable>
     </>}
   </View>;
