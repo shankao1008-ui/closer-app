@@ -1,9 +1,12 @@
 import { LinearGradient } from "expo-linear-gradient";
 import DateTimePicker, { DateTimePickerEvent } from "@react-native-community/datetimepicker";
 import { Bell, CalendarDays, Edit3, Gift, Lock, MapPin, Plane, Sparkles, X } from "lucide-react-native";
-import React, { useState } from "react";
-import { Alert, KeyboardAvoidingView, Modal, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
-import AvatarPicker from "../../components/AvatarPicker";
+import React, { useCallback, useState } from "react";
+import { Alert, KeyboardAvoidingView, Modal, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View, Switch } from "react-native";
+import UsStory from "../../components/UsStory";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { useFocusEffect, useRouter } from "expo-router";
+import { usDesignText } from "../../lib/usDesignText";
 import CityPicker from "../../components/CityPicker";
 import { useApp } from "../../context/AppContext";
 import { City, localizeCityName } from "../../lib/cities";
@@ -42,12 +45,15 @@ function birthdayToDate(value: string): Date {
 
 export default function UsScreen() {
   const {
-    colors, t, lang, partner, monthlyDays, setMonthlyDays, notifSettings, setNotifSettings,
-    myAvatarUri, setMyAvatarUri, partnerAvatarUri, setPartnerAvatarUri,
-    myName, myCity, rel, setRel,
+    colors, t, lang, monthlyDays, setMonthlyDays, notifSettings, setNotifSettings,
+    rel, setRel,
   } = useApp();
   const styles = makeStyles(colors);
-  const [now] = useState(new Date());
+  const [now, setNow] = useState(new Date());
+  const insets = useSafeAreaInsets();
+  const router = useRouter();
+  const design = usDesignText(lang);
+  useFocusEffect(useCallback(() => { setNow(new Date()); }, []));
   const [editingDates, setEditingDates] = useState(false);
   const [showCityPicker, setShowCityPicker] = useState(false);
   const [startDateText, setStartDateText] = useState("");
@@ -97,7 +103,7 @@ export default function UsScreen() {
     done: "Done",
   };
 
-  const togetherDays = diffParts(now, rel.startDate).days;
+  const togetherDays = rel.startDate && !Number.isNaN(rel.startDate.getTime()) && rel.startDate <= now ? diffParts(now, rel.startDate).days : null;
   const meetingCd = diffParts(rel.nextMeeting.date, now);
   const monthlyDaysLabel = monthlyDays.length
     ? monthlyDays.map((day) => `${day}${t("monthlyDaySuffix")}`).join(" · ")
@@ -112,6 +118,7 @@ export default function UsScreen() {
     setPartnerBirthday(rel.partnerBirthday ?? "");
     setDraftMonthlyDays([...monthlyDays]);
     setNewDay("");
+    setActivePicker(null);
     setEditingDates(true);
   };
 
@@ -187,48 +194,33 @@ export default function UsScreen() {
   return (
     <View style={{ flex: 1 }}>
       <LinearGradient colors={colors.screenBg as any} style={StyleSheet.absoluteFill} />
-      <ScrollView contentContainerStyle={styles.body} showsVerticalScrollIndicator={false}>
-        <Text style={[styles.headerTitle, { color: colors.ink }]}>{t("tabUs")}</Text>
-
-        <View style={[styles.card, { alignItems: "center", paddingVertical: 22 }]}>
-          <View style={{ flexDirection: "row" }}>
-            <View style={{ marginRight: -14, zIndex: 1 }}>
-              <AvatarPicker uri={myAvatarUri} onChange={setMyAvatarUri} initials={myName.charAt(0)} size={64} bgColor={colors.primary} />
-            </View>
-            <AvatarPicker uri={partnerAvatarUri} onChange={setPartnerAvatarUri} initials={partner.avatar} size={64} bgColor={colors.lavenderDeep} />
-          </View>
-          <Text style={[styles.coupleName, { color: colors.ink }]}>{myName} ❤️ {partner.name}</Text>
-          <Text style={{ fontSize: 12.5, color: colors.inkSoft, marginTop: 5 }}>
-            {t("togetherLabel")} {togetherDays.toLocaleString()} {t("daysWord")}
-          </Text>
-          <View style={{ flexDirection: "row", gap: 8, marginTop: 8 }}>
-            <View style={[styles.cityChip, { backgroundColor: colors.chipBg }]}>
-              <MapPin size={12} color={colors.inkSoft} />
-              <Text style={{ fontSize: 11, color: colors.inkSoft }}>{myCity.emoji} {myCity.name}</Text>
-            </View>
-            <View style={[styles.cityChip, { backgroundColor: colors.chipBg }]}>
-              <MapPin size={12} color={colors.inkSoft} />
-              <Text style={{ fontSize: 11, color: colors.inkSoft }}>{partner.city}</Text>
-            </View>
-          </View>
+      <ScrollView contentContainerStyle={[styles.body, { paddingTop: insets.top + 18 }]} showsVerticalScrollIndicator={false}>
+        <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 12 }}>
+          <View style={{ flex: 1 }}><Text style={[styles.headerTitle, { color: colors.ink }]}>{t("tabUs")}<Text style={{ color: colors.primary }}>.</Text></Text>
+          <Text style={{ color: colors.inkSoft, fontSize: 14, lineHeight: 21, marginTop: 5 }}>{design.subtitle}</Text></View>
+          <Pressable accessibilityRole="button" accessibilityLabel={t("settingsTitle")} onPress={() => router.push('/settings')} style={{ width: 46, height: 46, borderRadius: 23, alignItems: "center", justifyContent: "center", backgroundColor: colors.cardBg }}><Edit3 size={20} color={colors.primaryDeep} /></Pressable>
         </View>
+        <UsStory days={togetherDays} />
 
         <View style={styles.card}>
-          <Text style={[styles.eyebrow, { color: colors.inkSoft }]}>{t("importantDates")}</Text>
-          <AlignedRow icon={Lock} label={t("anniversaryLocked")} value={formatDate(rel.startDate).replaceAll("-", " / ")} colors={colors} />
-          <AlignedRow icon={CalendarDays} label={copy.lastMeeting} value={formatDate(rel.lastMeeting).replaceAll("-", " / ")} colors={colors} />
+          <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center", gap: 12, marginBottom: 10 }}>
+            <Text style={{ flex: 1, color: colors.ink, fontSize: 20, fontWeight: "800" }}>{design.timeline}</Text>
+            <Pressable accessibilityRole="button" accessibilityLabel={t("editAllDates")} onPress={openDateEditor} style={{ width: 44, height: 44, borderRadius: 16, backgroundColor: colors.hairline, alignItems: "center", justifyContent: "center" }}><Edit3 size={18} color={colors.primaryDeep} /></Pressable>
+          </View>
+          <AlignedRow icon={Lock} label={t("anniversaryLocked")} value={formatDate(rel.startDate).replaceAll("-", " / ") || "—"} colors={colors} />
+          <AlignedRow icon={CalendarDays} label={copy.lastMeeting} value={formatDate(rel.lastMeeting).replaceAll("-", " / ") || "—"} colors={colors} />
           <AlignedRow icon={Sparkles} label={t("monthlyAnniversary")} value={monthlyDaysLabel} colors={colors} />
-          <AlignedRow icon={Gift} label={t("partnerBirthday")} value={rel.partnerBirthday.replace("-", " / ")} colors={colors} />
-          <AlignedRow icon={Gift} label={t("myBirthday")} value={rel.myBirthday.replace("-", " / ")} colors={colors} />
+          <AlignedRow icon={Gift} label={t("partnerBirthday")} value={(rel.partnerBirthday || "—").replace("-", " / ")} colors={colors} />
+          <AlignedRow icon={Gift} label={t("myBirthday")} value={(rel.myBirthday || "—").replace("-", " / ")} colors={colors} />
           <AlignedRow
             icon={Plane}
             label={t("nextMeetingLabel")}
-            value={`${localizeCityName(rel.nextMeeting.cityName, lang)} · ${formatDate(rel.nextMeeting.date).replaceAll("-", " / ")} · ${t("daysUntilSuffix", { d: meetingCd.days })}`}
+            value={rel.nextMeeting.date ? `${localizeCityName(rel.nextMeeting.cityName, lang)} · ${formatDate(rel.nextMeeting.date).replaceAll("-", " / ")} ${rel.nextMeeting.date > now ? `· ${t("daysUntilSuffix", { d: meetingCd.days })}` : ""}` : "—"}
             colors={colors}
             last
           />
-          <Pressable onPress={openDateEditor} style={{ alignSelf: "flex-end", marginTop: 10 }}>
-            <Text style={{ color: colors.primaryDeep, fontSize: 12 }}>✏️ {t("editAllDates")}</Text>
+          <Pressable accessibilityRole="button" onPress={openDateEditor} style={{ alignItems: "center", padding: 15, borderRadius: 16, backgroundColor: colors.hairline, marginTop: 14 }}>
+            <Text style={{ color: colors.primaryDeep, fontSize: 14, fontWeight: "700" }}>{t("editAllDates")}</Text>
           </Pressable>
         </View>
 
@@ -293,7 +285,7 @@ export default function UsScreen() {
                     mode="date"
                     display={Platform.OS === "ios" ? "spinner" : "default"}
                     onChange={changePickerDate}
-                    locale={lang === "zh-Hant" ? "zh-TW" : "en-US"}
+                    locale={lang === "zh-Hant" ? "zh-TW" : lang === "zh-Hans" ? "zh-CN" : lang}
                     themeVariant="light"
                   />
                   {Platform.OS === "ios" && (
@@ -338,29 +330,35 @@ function DateField({ label, value, onPress, colors }: any) {
 }
 
 function AlignedRow({ icon: Icon, label, value, colors, last }: any) {
-  return <View style={[styles2.row, { borderBottomColor: colors.hairline, borderBottomWidth: last ? 0 : 1 }]}><Icon size={14} color={colors.primaryDeep} style={{ marginRight: 8 }} /><Text style={{ width: 84, fontSize: 12.5, fontWeight: "700", color: colors.ink, flexShrink: 0 }}>{label}</Text><Text style={{ flex: 1, fontSize: 12.5, color: colors.ink, fontWeight: "500" }}>{value}</Text></View>;
+  return <View style={styles2.row}>
+    <View style={{ width: 40, alignSelf: "stretch", alignItems: "center", marginRight: 13 }}>
+      {!last && <View style={{ position: "absolute", top: 32, bottom: -16, width: 2, backgroundColor: colors.hairline }} />}
+      <View style={{ width: 38, height: 38, borderRadius: 14, backgroundColor: colors.chipBg, alignItems: "center", justifyContent: "center" }}><Icon size={17} color={colors.primaryDeep} /></View>
+    </View>
+    <View style={{ flex: 1, paddingBottom: 10 }}><Text style={{ fontSize: 12, color: colors.inkSoft, marginBottom: 5 }}>{label}</Text><Text style={{ fontSize: 15, color: colors.ink, fontWeight: "700", lineHeight: 22 }}>{value || "—"}</Text></View>
+  </View>;
 }
 
 function ToggleRow({ icon: Icon, label, sub, value, onChange, colors }: any) {
-  return <View style={{ flexDirection: "row", alignItems: "flex-start", gap: 10 }}><Icon size={15} color={colors.inkSoft} style={{ marginTop: 1 }} /><View style={{ flex: 1 }}><Text style={{ fontSize: 12.5, color: colors.ink }}>{label}</Text>{sub && <Text style={{ fontSize: 10.5, color: colors.inkSoft, marginTop: 2 }}>{sub}</Text>}</View><Pressable onPress={() => onChange(!value)} style={{ width: 38, height: 22, borderRadius: 100, backgroundColor: value ? colors.primary : colors.hairline, justifyContent: "center" }}><View style={{ width: 18, height: 18, borderRadius: 9, backgroundColor: "#fff", marginLeft: value ? 18 : 2 }} /></Pressable></View>;
+  return <View style={{ flexDirection: "row", alignItems: "center", gap: 12 }}><View style={{ width: 42, height: 42, borderRadius: 15, backgroundColor: colors.chipBg, alignItems: "center", justifyContent: "center" }}><Icon size={20} color={colors.primaryDeep} /></View><View style={{ flex: 1 }}><Text style={{ fontSize: 15, fontWeight: "700", color: colors.ink }}>{label}</Text>{sub && <Text style={{ fontSize: 12, lineHeight: 18, color: colors.inkSoft, marginTop: 4 }}>{sub}</Text>}</View><Switch accessibilityLabel={label} value={value} onValueChange={onChange} trackColor={{ false: colors.hairline, true: colors.primary }} thumbColor="#FFFFFF" /></View>;
 }
 
 const styles2 = StyleSheet.create({
-  row: { flexDirection: "row", alignItems: "center", paddingVertical: 8 },
+  row: { flexDirection: "row", alignItems: "flex-start", paddingTop: 12 },
   fieldLabel: { fontSize: 12, marginTop: 12, marginBottom: 4 },
   input: { paddingHorizontal: 14, paddingVertical: 11, borderRadius: 12, borderWidth: 1, flexDirection: "row", justifyContent: "space-between", alignItems: "center" },
 });
 
 function makeStyles(colors: any) {
   return StyleSheet.create({
-    body: { padding: 16, paddingTop: Platform.OS === "ios" ? 60 : 32, paddingBottom: 40, gap: 12 },
-    headerTitle: { fontWeight: "700", fontSize: 17, textAlign: "center", marginBottom: 2 },
-    card: { backgroundColor: colors.cardBg, borderRadius: 20, padding: 16, borderWidth: 1, borderColor: colors.cardBorder },
+    body: { padding: 20, paddingBottom: 48, gap: 20 },
+    headerTitle: { fontWeight: "800", fontSize: 34, letterSpacing: -1 },
+    card: { backgroundColor: colors.cardBg, borderRadius: 28, padding: 22 },
     coupleName: { fontWeight: "700", fontSize: 16, marginTop: 10 },
     eyebrow: { fontSize: 11, fontWeight: "700", letterSpacing: 0.5, textTransform: "uppercase", marginBottom: 4 },
     cityChip: { flexDirection: "row", alignItems: "center", gap: 4, paddingHorizontal: 10, paddingVertical: 4, borderRadius: 100 },
     modalBackdrop: { flex: 1, backgroundColor: "rgba(20,14,20,0.5)", alignItems: "center", justifyContent: "center", padding: 18 },
-    modalCard: { width: "100%", maxHeight: "88%", borderRadius: 22, padding: 18 },
+    modalCard: { width: "100%", maxHeight: "88%", borderRadius: 28, padding: 18 },
     modalHeader: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: 4 },
     fieldLabel: { fontSize: 12, marginTop: 12, marginBottom: 4 },
     citySelector: { flexDirection: "row", alignItems: "center", paddingHorizontal: 14, paddingVertical: 12, borderRadius: 12, borderWidth: 1 },
