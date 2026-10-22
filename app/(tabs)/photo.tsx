@@ -1,12 +1,13 @@
 import * as ImagePicker from "expo-image-picker";
 import { LinearGradient } from "expo-linear-gradient";
-import { Camera, Image as ImageIcon, Images, Send, Type, Heart, Sparkles, ChevronDown, ChevronUp, Check } from "lucide-react-native";
-import React, { useRef, useState } from "react";
+import { Camera, Image as ImageIcon, Images, Send, Type, Heart, Sparkles, ChevronDown, ChevronUp, Check, X } from "lucide-react-native";
+import React, { useEffect, useRef, useState } from "react";
 import {
   Animated,
   ActivityIndicator,
   Alert,
   Image,
+  KeyboardAvoidingView,
   LayoutChangeEvent,
   PanResponder,
   Platform,
@@ -24,6 +25,7 @@ import { sendPartnerWidgetPhoto } from "../../lib/widgetSync";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import PhotoGlow from "../../components/PhotoGlow";
 import { photoDesignText } from "../../lib/photoDesignText";
+import { polishText } from "../../lib/polishText";
 import ReceivedPhoto from "../../components/ReceivedPhoto";
 import { receivedPhotoText } from "../../lib/receivedPhotoText";
 
@@ -39,6 +41,8 @@ export default function PhotoScreen() {
   const { colors, t, lang, gender, uid, coupleId } = useApp();
   const copy = photoText(lang);
   const design = photoDesignText(lang);
+  const polish = polishText(lang);
+  const sendLock = useRef(false);
   const insets = useSafeAreaInsets();
   const [showStyle, setShowStyle] = useState(false);
   const inboxCopy = receivedPhotoText(lang);
@@ -56,12 +60,22 @@ export default function PhotoScreen() {
   const [sending, setSending] = useState(false);
   const fadeAnim = useRef(new Animated.Value(0)).current;
 
+  useEffect(() => () => { fadeAnim.stopAnimation(); }, [fadeAnim]);
+
+  const selectPhoto = (uri: string) => {
+    setPhotoUri(uri);
+    pos.setOffset({ x: 0, y: 0 });
+    pos.setValue({ x: 0, y: 0 });
+    setSent(false);
+    fadeAnim.stopAnimation();
+  };
+
   const takePhoto = async () => {
     try {
       const perm = await ImagePicker.requestCameraPermissionsAsync();
       if (!perm.granted) { Alert.alert(copy.cameraTitle, copy.cameraBody); return; }
       const result = await ImagePicker.launchCameraAsync({ quality: 0.8, allowsEditing: true, aspect: [4, 5] });
-      if (!result.canceled && result.assets?.[0]) setPhotoUri(result.assets[0].uri);
+      if (!result.canceled && result.assets?.[0]) selectPhoto(result.assets[0].uri);
     } catch { Alert.alert(copy.cameraFailed, copy.tryAgain); }
   };
 
@@ -70,7 +84,7 @@ export default function PhotoScreen() {
       const perm = await ImagePicker.requestMediaLibraryPermissionsAsync();
       if (!perm.granted) { Alert.alert(copy.libraryTitle, copy.libraryBody); return; }
       const result = await ImagePicker.launchImageLibraryAsync({ mediaTypes: ["images"], quality: 0.8, allowsEditing: true, aspect: [4, 5] });
-      if (!result.canceled && result.assets?.[0]) setPhotoUri(result.assets[0].uri);
+      if (!result.canceled && result.assets?.[0]) selectPhoto(result.assets[0].uri);
     } catch { Alert.alert(copy.pickerFailed, copy.tryAgain); }
   };
 
@@ -122,7 +136,8 @@ export default function PhotoScreen() {
       Alert.alert(copy.chooseTitle, copy.chooseBody);
       return;
     }
-    if (sending) return;
+    if (sendLock.current) return;
+    sendLock.current = true;
     setSending(true);
     try {
       await sendPartnerWidgetPhoto({ uri: photoUri, coupleId, senderId: uid, caption: text });
@@ -130,6 +145,7 @@ export default function PhotoScreen() {
       Alert.alert(copy.sendFailed, photoError(error, lang));
       return;
     } finally {
+      sendLock.current = false;
       setSending(false);
     }
     setSent(true);
@@ -144,6 +160,7 @@ export default function PhotoScreen() {
   return (
     <View style={{ flex: 1 }}>
       <LinearGradient colors={colors.screenBg as any} style={StyleSheet.absoluteFill} />
+      <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === "ios" ? "padding" : undefined}>
       <ScrollView contentContainerStyle={[styles.body, { paddingTop: insets.top + 18 }]} keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false}>
         <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 12 }}>
           <View style={{ flex: 1 }}><Text style={{ color: colors.ink, fontSize: 32, fontWeight: "800", letterSpacing: -1 }}>{t("tabPhoto")}<Text style={{ color: colors.primary }}>.</Text></Text>
@@ -185,6 +202,7 @@ export default function PhotoScreen() {
               {text || "..."}
             </Text>
           </Animated.View>
+          {photoUri && <Pressable accessibilityRole="button" accessibilityLabel={polish.removePhoto} disabled={sending} onPress={() => { setPhotoUri(null); pos.setOffset({ x: 0, y: 0 }); pos.setValue({ x: 0, y: 0 }); }} style={{ position: "absolute", top: 8, left: 8, width: 44, height: 44, borderRadius: 22, backgroundColor: "#352A3BCC", alignItems: "center", justifyContent: "center" }}><X size={21} color="#FFFFFF" /></Pressable>}
           <View style={[styles.dragHintTag, { backgroundColor: gender === "masculine" ? "rgba(26,54,93,0.55)" : "rgba(181,75,48,0.55)" }]}>
             <Text style={{ color: "#fff", fontSize: 10.5, fontWeight: "700" }}>{t("dragHint")}</Text>
           </View>
@@ -274,7 +292,7 @@ export default function PhotoScreen() {
           </LinearGradient>
         </Pressable>
         <ReceivedPhoto />
-      </ScrollView>
+      </ScrollView></KeyboardAvoidingView>
 
       {sent && (
         <Animated.View pointerEvents="none" style={[styles.overlay, { opacity: fadeAnim }]}>

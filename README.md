@@ -12,7 +12,7 @@ The project has grown from an early interface with local data into an Expo app w
 
 ### 🏠 Home — your relationship at a glance
 
-See both cities and time zones, count down to your next meeting, and send quick emoji reactions. Home also brings together shared activities and a one-tap **“I miss you”** heart for your partner to see in the app.
+See both cities and time zones, count down to your next meeting, and try playful local emoji reactions. Home also brings together shared activities and a one-tap **“I miss you”** heart for your partner to see in the app.
 
 ### 💬 Chat — everyday conversations
 
@@ -65,6 +65,17 @@ I lead the product direction, visual choices and testing, and use AI tools to he
 ## October interface refresh
 
 Home now features a shared-space hero, paired avatars, a clear invitation for unpaired users, and direct photo/chat shortcuts. Colorful heart, moment and overlap cards replace repetitive rows. Both appearance themes and the tab bar have been refreshed. New Home copy covers all nine supported languages; unpaired users no longer see a fictional online partner or shared-city details.
+
+### Photo, Us and pairing polish
+
+- Home and Us have eight decorative hearts moving along curved paths. Live Photo has a slowly moving gradient and floating accents. Ambient animations pause off-screen and respect Reduce Motion.
+- Live Photo uses a postcard composer with a tap-to-select image area, photo removal, collapsible caption styles, and a separate partner inbox. Caption styling is a local preview; the image and caption are sent separately.
+- Us presents portraits, relationship days, shortcuts to shared moments and wishes, and a date timeline. Only your own portrait opens profile settings.
+- Pairing supports nine languages, normalizes pasted codes, and offers the device share sheet. A request guard prevents duplicate create/join submissions.
+- An unpaired wish-list action now opens pairing. Empty relationship-date fields retain existing values so other fields can be saved separately; future relationship-start and past-meeting dates are rejected.
+- Photo sending prevents duplicate in-flight submissions; editing has keyboard avoidance and a reset caption position when selecting a new image.
+
+These changes passed TypeScript checking and an iOS JavaScript export. Device-session unit checks and pairing input/translation checks also passed. Camera, sharing, photo delivery and pair synchronization still require a two-phone test against the backend.
 
 ## Development status
 

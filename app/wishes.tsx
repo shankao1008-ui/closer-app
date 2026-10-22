@@ -27,7 +27,7 @@ function Screen(){
   }}
   finally{lock.current=false;if(alive.current)setBusy(false);}
  };
- const add=()=>{if(!uid || !coupleId) return; if(!title.trim()){Alert.alert(c.wishes,c.invalid);return;}
+ const add=()=>{if(!uid || !coupleId){router.push('/pairing');return;} if(!title.trim()){Alert.alert(c.wishes,c.invalid);return;}
   const value=title.trim(),kind=category;
   void action(async()=>{const id=await hwRpc('closer_add_wish',{c:coupleId,t:value,k:kind});if(alive.current){setTitle('');setFilter('all');setSaved(true);setData(old=>old.some(w=>w.id===id)?old:[{id,creator:uid,title:value,category:kind,done:false,created_at:new Date().toISOString()},...old]);}});
  };
@@ -38,7 +38,7 @@ function Screen(){
  return <View style={{flex:1}}><LinearGradient colors={colors.screenBg as any} style={{position:'absolute',top:0,left:0,bottom:0,right:0}}/><SafeAreaView style={{flex:1}}><KeyboardAvoidingView style={{flex:1}} behavior={Platform.OS==='ios'?'padding':undefined}><ScrollView keyboardShouldPersistTaps="handled" contentContainerStyle={{padding:20,gap:16,paddingBottom:40}}>
   <Pressable accessibilityRole="button" accessibilityLabel={c.back} onPress={()=>router.back()} style={{minHeight:44,justifyContent:'center'}}><ArrowLeft size={24} color={colors.ink}/></Pressable>
   <Text style={{color:colors.ink,fontSize:28,fontWeight:'700'}}>{c.wishes}</Text><Text style={{color:colors.inkSoft}}>{c.wishHint}</Text>
-  {!coupleId&&<Text style={{color:colors.ink}}>{c.pair}</Text>}
+  {!coupleId&&<Pressable accessibilityRole="button" onPress={()=>router.push('/pairing')} style={{backgroundColor:colors.cardBg,padding:18,borderRadius:20,minHeight:48}}><Text style={{color:colors.primaryDeep,fontWeight:'700'}}>{c.pair} →</Text></Pressable>}
   <View style={card}>
    <View style={{flexDirection:'row',flexWrap:'wrap',gap:6}}>{(['place','date','goal'] as const).map(k=><Pressable key={k} accessibilityRole="radio" accessibilityState={{selected:category===k}} onPress={()=>setCategory(k)} style={{padding:12,minHeight:44,borderRadius:14,backgroundColor:category===k?colors.primary:colors.hairline}}><Text style={{color:category===k?'#fff':colors.ink}}>{c[k]}</Text></Pressable>)}</View>
    <TextInput accessibilityLabel={c.placeholder} editable={!busy} placeholder={c.placeholder} placeholderTextColor={colors.inkSoft} value={title} onChangeText={setTitle} maxLength={120} multiline style={{minHeight:80,color:colors.ink,padding:14,backgroundColor:colors.hairline,borderRadius:14,textAlignVertical:'top'}}/>

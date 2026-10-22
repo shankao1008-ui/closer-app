@@ -2,16 +2,20 @@ import * as Clipboard from "expo-clipboard";
 import { LinearGradient } from "expo-linear-gradient";
 import { useRouter } from "expo-router";
 import { ArrowLeft, Copy, Heart } from "lucide-react-native";
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import {
-    ActivityIndicator, Alert, Platform, Pressable, StyleSheet, Text, TextInput, View,
+    ActivityIndicator, Alert, AppState, KeyboardAvoidingView, ScrollView, Share, Pressable, StyleSheet, Text, TextInput, View,
 } from "react-native";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { pairingText, normalizePairingCode } from "../lib/pairingText";
 import { useApp } from "../context/AppContext";
 import { createPairingCode, redeemPairingCode } from "../lib/pairing";
 
 export default function PairingScreen() {
   const { colors, coupleId, lang, refreshPairing } = useApp();
-  const en = lang === "en";
+  const c = pairingText(lang);
+  const insets = useSafeAreaInsets();
+  const requestLock = useRef(false);
   const router = useRouter();
   const styles = makeStyles(colors);
   const [mode, setMode] = useState<"choose" | "create" | "join">("choose");
@@ -22,7 +26,7 @@ export default function PairingScreen() {
   // Refresh the creator too, even when Realtime publication is unavailable.
   useEffect(() => {
     if (coupleId || mode !== "create") return;
-    const timer = setInterval(() => { void refreshPairing().catch(() => {}); }, 5000);
+    const timer = setInterval(() => { if (AppState.currentState === "active") void refreshPairing().catch(() => {}); }, 5000);
     return () => clearInterval(timer);
   }, [coupleId, mode, refreshPairing]);
 
@@ -31,70 +35,81 @@ export default function PairingScreen() {
     return (
       <View style={[styles.root, { backgroundColor: colors.screenBg[2], alignItems: "center", justifyContent: "center", padding: 24 }]}>
         <Heart size={40} color={colors.primary} />
-        <Text style={{ marginTop: 12, fontSize: 15, fontWeight: "700", color: colors.ink }}>{en ? "You’re paired!" : "你們已經配對成功了！"}</Text>
+        <Text style={{ marginTop: 12, fontSize: 15, fontWeight: "700", color: colors.ink }}>{c.success}</Text>
         <Pressable onPress={() => router.replace("/(tabs)")} style={[styles.primaryBtn, { backgroundColor: colors.primary, marginTop: 20 }]}>
-          <Text style={{ color: "#fff", fontWeight: "700", fontSize: 14 }}>{en ? "Back to Home" : "回到主畫面"}</Text>
+          <Text style={{ color: "#fff", fontWeight: "700", fontSize: 14 }}>{c.home}</Text>
         </Pressable>
       </View>
     );
   }
 
   const handleCreate = async () => {
+    if (requestLock.current) return;
+    requestLock.current = true;
     setLoading(true);
     try {
       const code = await createPairingCode();
       setMyCode(code);
       setMode("create");
     } catch (e: any) {
-      Alert.alert(en ? "Something went wrong" : "發生錯誤", e.message ?? (en ? "Please try again later" : "請稍後再試"));
+      Alert.alert(c.error, c.retry);
     } finally {
+      requestLock.current = false;
       setLoading(false);
     }
   };
 
   const handleJoin = async () => {
-    if (!inputCode.trim()) return;
+    if (requestLock.current || !/^[A-Z0-9]{6}$/.test(inputCode)) return;
+    requestLock.current = true;
     setLoading(true);
     try {
       await redeemPairingCode(inputCode.trim());
       await refreshPairing();
-      Alert.alert(en ? "Paired successfully!" : "配對成功！", en ? "You’re now connected 💕" : "你們已經連上囉 💕");
+      Alert.alert(c.success, c.subtitle);
     } catch (e: any) {
-      Alert.alert(en ? "Pairing failed" : "配對失敗", e.message ?? (en ? "Please check the pairing code" : "請確認配對碼是否正確"));
+      Alert.alert(c.failed, c.check);
     } finally {
+      requestLock.current = false;
       setLoading(false);
     }
   };
 
   const copyCode = async () => {
     if (!myCode) return;
-    await Clipboard.setStringAsync(myCode);
-    Alert.alert(en ? "Copied" : "已複製", en ? "Send this pairing code to your partner" : "把配對碼傳給對方吧");
+    try {
+      await Clipboard.setStringAsync(myCode);
+      Alert.alert(c.copied, c.copiedHint);
+    } catch { Alert.alert(c.error, c.retry); }
   };
 
   return (
     <View style={[styles.root, { backgroundColor: colors.screenBg[2] }]}>
       <LinearGradient colors={colors.screenBg as any} style={StyleSheet.absoluteFill} />
-      <View style={styles.header}>
+      <View style={[styles.header, { paddingTop: insets.top + 12 }]}>
         <Pressable
+          accessibilityRole="button" accessibilityLabel={c.back} disabled={loading}
           onPress={() => (mode === "choose" ? router.back() : setMode("choose"))}
           style={[styles.iconBtn, { backgroundColor: colors.chipBg }]}
         >
           <ArrowLeft size={15} color={colors.ink} />
         </Pressable>
-        <Text style={[styles.title, { color: colors.ink }]}>{en ? "Pairing" : "配對"}</Text>
+        <Text style={[styles.title, { color: colors.ink }]}>{c.title}</Text>
         <View style={{ width: 30 }} />
       </View>
 
+      <KeyboardAvoidingView style={{ flex: 1 }} behavior="padding">
+      <ScrollView keyboardShouldPersistTaps="handled" contentContainerStyle={{ paddingBottom: insets.bottom + 28 }}>
+      <View style={{ alignItems: "center", padding: 24, gap: 14 }}><View style={{ padding: 22, borderRadius: 30, backgroundColor: colors.cardBg }}><Heart size={36} color={colors.primary} fill={colors.primary + "20"} /></View><Text style={{ color: colors.ink, fontSize: 22, fontWeight: "800", textAlign: "center" }}>{c.subtitle}</Text></View>
       {mode === "choose" && (
         <View style={{ padding: 16, gap: 12 }}>
           <Pressable onPress={handleCreate} disabled={loading} style={[styles.card, { backgroundColor: colors.cardBg, borderColor: colors.cardBorder }]}>
-            <Text style={{ fontSize: 14, fontWeight: "700", color: colors.ink }}>{en ? "Create pairing code" : "產生配對碼"}</Text>
-            <Text style={{ fontSize: 12, color: colors.inkSoft, marginTop: 4 }}>{en ? "Your partner can enter this code to connect" : "給對方輸入，連上你的帳號"}</Text>
+            <Text style={{ fontSize: 14, fontWeight: "700", color: colors.ink }}>{c.create}</Text>
+            <Text style={{ fontSize: 12, color: colors.inkSoft, marginTop: 4 }}>{c.createHint}</Text>
           </Pressable>
           <Pressable onPress={() => setMode("join")} disabled={loading} style={[styles.card, { backgroundColor: colors.cardBg, borderColor: colors.cardBorder }]}>
-            <Text style={{ fontSize: 14, fontWeight: "700", color: colors.ink }}>{en ? "Enter pairing code" : "輸入配對碼"}</Text>
-            <Text style={{ fontSize: 12, color: colors.inkSoft, marginTop: 4 }}>{en ? "Connect using your partner’s code" : "用對方給你的配對碼連上"}</Text>
+            <Text style={{ fontSize: 14, fontWeight: "700", color: colors.ink }}>{c.join}</Text>
+            <Text style={{ fontSize: 12, color: colors.inkSoft, marginTop: 4 }}>{c.joinHint}</Text>
           </Pressable>
           {loading && <ActivityIndicator color={colors.primary} />}
         </View>
@@ -102,37 +117,43 @@ export default function PairingScreen() {
 
       {mode === "create" && myCode && (
         <View style={{ padding: 16, alignItems: "center" }}>
-          <Text style={{ fontSize: 13, color: colors.inkSoft, marginBottom: 16 }}>{en ? "Send this code to your partner" : "把這組配對碼傳給對方"}</Text>
+          <Text style={{ fontSize: 13, color: colors.inkSoft, marginBottom: 16 }}>{c.sendCode}</Text>
           <Pressable onPress={copyCode} style={[styles.codeBox, { backgroundColor: colors.cardBg, borderColor: colors.cardBorder }]}>
             <Text style={{ fontSize: 32, fontWeight: "800", letterSpacing: 6, color: colors.primaryDeep }}>{myCode}</Text>
             <View style={{ flexDirection: "row", alignItems: "center", gap: 4, marginTop: 10 }}>
               <Copy size={12} color={colors.inkSoft} />
-              <Text style={{ fontSize: 11, color: colors.inkSoft }}>{en ? "Tap to copy" : "點擊複製"}</Text>
+              <Text style={{ fontSize: 11, color: colors.inkSoft }}>{c.copy}</Text>
             </View>
           </Pressable>
+          <Pressable accessibilityRole="button" onPress={async () => { try { await Share.share({ message: `${c.sendCode}: ${myCode}` }); } catch { Alert.alert(c.error, c.retry); } }} style={[styles.primaryBtn, { backgroundColor: colors.primary, alignSelf: "stretch", marginTop: 16 }]}><Text style={{ color: "#fff", fontWeight: "700" }}>{c.share}</Text></Pressable>
           <Text style={{ fontSize: 11, color: colors.inkSoft, marginTop: 20, textAlign: "center" }}>
-            {en ? "This screen updates automatically after your partner enters the code" : "對方輸入後，這個畫面會自動更新為配對成功"}
+            {c.waiting}
           </Text>
         </View>
       )}
 
       {mode === "join" && (
         <View style={{ padding: 16 }}>
-          <Text style={{ fontSize: 13, color: colors.inkSoft, marginBottom: 10 }}>{en ? "Enter your partner’s 6-character code" : "輸入對方給你的 6 位英數配對碼"}</Text>
+          <Text style={{ fontSize: 13, color: colors.inkSoft, marginBottom: 10 }}>{c.input}</Text>
           <TextInput
             value={inputCode}
-            onChangeText={setInputCode}
+            onChangeText={value => setInputCode(normalizePairingCode(value))}
+            accessibilityLabel={c.input}
+            editable={!loading}
+            autoCorrect={false}
+            returnKeyType="done"
+            onSubmitEditing={() => { void handleJoin(); }}
             autoCapitalize="characters"
-            maxLength={6}
             placeholder="A1B2C3"
             placeholderTextColor={colors.inkSoft}
             style={[styles.input, { backgroundColor: colors.inputBg, color: colors.ink, borderColor: colors.cardBorder }]}
           />
           <Pressable onPress={handleJoin} disabled={loading || inputCode.length < 6} style={[styles.primaryBtn, { backgroundColor: colors.primary, marginTop: 16, opacity: loading || inputCode.length < 6 ? 0.5 : 1 }]}>
-            {loading ? <ActivityIndicator color="#fff" /> : <Text style={{ color: "#fff", fontWeight: "700", fontSize: 14 }}>{en ? "Pair now" : "確認配對"}</Text>}
+            {loading ? <ActivityIndicator color="#fff" /> : <Text style={{ color: "#fff", fontWeight: "700", fontSize: 14 }}>{c.pair}</Text>}
           </Pressable>
         </View>
       )}
+      </ScrollView></KeyboardAvoidingView>
     </View>
   );
 }
@@ -142,13 +163,13 @@ function makeStyles(colors: any) {
     root: { flex: 1 },
     header: {
       flexDirection: "row", alignItems: "center", justifyContent: "space-between",
-      paddingHorizontal: 16, paddingTop: Platform.OS === "ios" ? 60 : 32, paddingBottom: 12,
+      paddingHorizontal: 16, paddingTop: 20, paddingBottom: 12,
     },
-    iconBtn: { width: 30, height: 30, borderRadius: 10, alignItems: "center", justifyContent: "center" },
+    iconBtn: { width: 44, height: 44, borderRadius: 16, alignItems: "center", justifyContent: "center" },
     title: { flex: 1, textAlign: "center", fontWeight: "700", fontSize: 17 },
-    card: { borderRadius: 20, padding: 16, borderWidth: 1 },
-    codeBox: { borderRadius: 20, borderWidth: 1, paddingHorizontal: 32, paddingVertical: 24, alignItems: "center" },
+    card: { borderRadius: 26, padding: 24, borderWidth: 1 },
+    codeBox: { borderRadius: 28, borderWidth: 1, paddingHorizontal: 32, paddingVertical: 24, alignItems: "center" },
     input: { borderRadius: 14, borderWidth: 1, paddingHorizontal: 16, paddingVertical: 14, fontSize: 20, textAlign: "center", letterSpacing: 8 },
-    primaryBtn: { paddingVertical: 13, borderRadius: 100, alignItems: "center", justifyContent: "center" },
+    primaryBtn: { minHeight: 54, paddingHorizontal: 16, paddingVertical: 16, borderRadius: 100, alignItems: "center", justifyContent: "center" },
   });
 }

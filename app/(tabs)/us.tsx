@@ -6,6 +6,7 @@ import { Alert, KeyboardAvoidingView, Modal, Platform, Pressable, ScrollView, St
 import UsStory from "../../components/UsStory";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useFocusEffect, useRouter } from "expo-router";
+import { polishText } from "../../lib/polishText";
 import { usDesignText } from "../../lib/usDesignText";
 import CityPicker from "../../components/CityPicker";
 import { useApp } from "../../context/AppContext";
@@ -53,6 +54,7 @@ export default function UsScreen() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
   const design = usDesignText(lang);
+  const polish = polishText(lang);
   useFocusEffect(useCallback(() => { setNow(new Date()); }, []));
   const [editingDates, setEditingDates] = useState(false);
   const [showCityPicker, setShowCityPicker] = useState(false);
@@ -138,25 +140,30 @@ export default function UsScreen() {
     const startDate = parseDate(startDateText);
     const lastMeeting = parseDate(lastMeetingText);
     const nextMeetingDate = parseDate(nextMeetingText);
-    if (!startDate || !lastMeeting || !nextMeetingDate) {
+    if ((startDateText.trim() && !startDate) || (lastMeetingText.trim() && !lastMeeting) || (nextMeetingText.trim() && !nextMeetingDate)) {
       Alert.alert(copy.invalidDateTitle, copy.invalidDateMessage);
       return;
     }
-    if (!validBirthday(myBirthday) || !validBirthday(partnerBirthday)) {
+    if ((myBirthday.trim() && !validBirthday(myBirthday)) || (partnerBirthday.trim() && !validBirthday(partnerBirthday))) {
       Alert.alert(copy.invalidDateTitle, copy.invalidDateMessage);
       return;
     }
-    if (!meetingCity.trim()) {
+    const today = new Date(); today.setHours(23, 59, 59, 999);
+    if ((startDate && startDate > today) || (lastMeeting && lastMeeting > today)) {
+      Alert.alert(copy.invalidDateTitle, polish.future);
+      return;
+    }
+    if (nextMeetingDate && !meetingCity.trim()) {
       Alert.alert(copy.cityTitle, copy.cityMessage);
       return;
     }
     setRel((current) => ({
       ...current,
-      startDate,
-      lastMeeting,
-      myBirthday: myBirthday.trim(),
-      partnerBirthday: partnerBirthday.trim(),
-      nextMeeting: { ...current.nextMeeting, cityName: meetingCity.trim(), date: nextMeetingDate },
+      startDate: startDate ?? current.startDate,
+      lastMeeting: lastMeeting ?? current.lastMeeting,
+      myBirthday: myBirthday.trim() || current.myBirthday,
+      partnerBirthday: partnerBirthday.trim() || current.partnerBirthday,
+      nextMeeting: { ...current.nextMeeting, cityName: meetingCity.trim() || current.nextMeeting.cityName, date: nextMeetingDate ?? current.nextMeeting.date },
     }));
     setMonthlyDays(draftMonthlyDays);
     setEditingDates(false);
@@ -247,6 +254,7 @@ export default function UsScreen() {
               <Pressable onPress={() => setEditingDates(false)}><X size={20} color={colors.inkSoft} /></Pressable>
             </View>
             <ScrollView showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
+              <Text style={{ color: colors.inkSoft, lineHeight: 20, marginVertical: 12 }}>{polish.optional}</Text>
               <DateField label={copy.startDate} value={startDateText} onPress={() => openPicker("start")} colors={colors} />
               <DateField label={copy.lastMeetingDate} value={lastMeetingText} onPress={() => openPicker("last")} colors={colors} />
               <DateField label={copy.nextMeetingDate} value={nextMeetingText} onPress={() => openPicker("next")} colors={colors} />
